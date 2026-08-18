@@ -34,4 +34,30 @@ Guidelines:
 		- output file name : capstone-technical-design.md
 
 ---
+### PROMPT-4 : Implementation Plan generation
+
+Using the following reference documents, generate a detailed implementation plan for the capstone project.
+
+Reference Documents:
+- capstone-proposal.md
+- capstone-requirements.md
+- capstone-architecture.md
+- capstone-technical-design.md
+
+Guidelines: 
+- clean, structured Markdown implementation plan
+- including detailed tasks and deliverables 
+- Logical sequencing (dependencies first)
+- include recommended tools, libraries, dependencies, models etc 
+- include recommended project structure
+
+
+Output Formatting requirements
+- Output MUST be in clean Markdown  
+- Use headings, subheadings, bullet points, and checkboxes  
+- No filler text  
+- No generic advice  
+- The plan must be actionable and ready for execution  
+- Output File Name : capstone-implementation-plan.md
+
 
