@@ -6,15 +6,17 @@
 
 ## Executive Summary
 
-**MVP Timeline:** 4 weeks (compressed from 6 weeks with 2-week buffer for unforeseen delays)  
+**MVP Timeline:** 4 weeks (with 2 weeks reserved as a contingency buffer)  
 **Team Structure:** 5-6 developers (backend, frontend, AI/ML, QA, tech lead)  
-**Tech Stack:** Python 3.11+, FastAPI, Streamlit, LangChain, LangGraph, PostgreSQL, FAISS/Chroma  
+**Tech Stack:** Python 3.11+, FastAPI, Streamlit, LangChain, LangGraph, PostgreSQL, FAISS  
 **Delivery:** Working MVP with student exam generation, validation, scoring, and weak-area detection  
 **Strategy:** Maximum parallelization, MVP-only scope, aggressive task consolidation  
 
+**Database decision:** Use PostgreSQL locally, for integration tests, and in production. This keeps all environments on the same database engine and avoids dialect-specific behavior during the four-week implementation.
+
 ---
 
-## Phase 1: Setup, Infrastructure & RAG Pipeline (Week 1)
+## Phase 1: Setup & Infrastructure (Week 1)
 
 ### 1.1 Repository & Collaboration Setup
 
@@ -72,7 +74,7 @@
   langchain-community==0.0.10
   
   # Vector DB
-  faiss-cpu==1.7.4  # or chroma==0.4.10
+  faiss-cpu==1.7.4
   
   # Embeddings
   sentence-transformers==2.2.2
@@ -83,13 +85,10 @@
   alembic==1.13.0
   
   # PDF/Document Processing
-  PyPDF2==3.17.0
-  pdfplumber==0.10.3
   pypdf==4.0.0
   
   # Frontend
   streamlit==1.28.1
-  streamlit-authenticator==0.2.3
   
   # Security
   python-jose==3.3.0
@@ -109,7 +108,7 @@
 - [ ] **Setup .env.example template**
   ```
   # Database
-  DATABASE_URL=postgresql://user:password@localhost:5432/capstone
+  DATABASE_URL=postgresql+psycopg2://capstone_user:password@localhost:5432/capstone
   
   # LLM API
   OPENAI_API_KEY=sk-...
@@ -120,7 +119,7 @@
   ACCESS_TOKEN_EXPIRE_MINUTES=30
   
   # Vector DB
-  VECTOR_DB_TYPE=faiss  # or chroma
+  VECTOR_DB_TYPE=faiss
   VECTOR_DB_PATH=./vectors/
   
   # App
@@ -133,10 +132,10 @@
   pip install -r requirements.txt
   ```
 
-### 1.3 Database Setup & RAG Pipeline Initialization (Parallel Track)
+### 1.3 Database Setup (Parallel Track)
 
 - [ ] **PostgreSQL installation & initialization** (can run parallel to section 1.1-1.2)
-  - Create database: `capstone`
+  - Create databases: `capstone` and `capstone_test`
   - Create user with permissions
 
 - [ ] **Initialize Alembic for migrations**
@@ -145,19 +144,14 @@
   ```
 
 - [ ] **Setup SQLAlchemy session factory** (`app/db/session.py`)
+  - Use `postgresql+psycopg2://` URLs for development, testing, and production
 
 - [ ] **Quick curriculum data collection**
   - Collect core PDFs: Physics (3 chapters) + Math (4 chapters)
   - Store in `data/curriculum/` folder
   - **NO cleanup/parsing yet** — done in Phase 2
 
----
-
-## Phase 2: Core AI Agents & Backend APIs (Weeks 1-2) — PARALLEL EXECUTION
-
-**CRITICAL:** Backend and AI teams work simultaneously on separate branches. Daily integration checks.
-
-### 2.1 Database Models & RAG Setup (AI Team + Backend Team)
+Phase 1 produces the runnable development environment, database connection, migration scaffold, and raw curriculum inputs. RAG processing and retrieval validation begin in Phase 2 after these prerequisites are available.
 
 ---
 
@@ -188,7 +182,7 @@
 ### 2.2 RAG Pipeline & Document Processing (AI Team)
 
 - [ ] **Curriculum data ingestion** (`app/rag/ingestion.py`)
-  - Load PDFs using PyPDF2/pdfplumber
+  - Load PDFs using pypdf
   - Extract text with basic cleaning
 
 - [ ] **Document chunking** (`app/rag/chunking.py`)
@@ -196,7 +190,7 @@
   - Tag metadata: subject, chapter, topic
 
 - [ ] **Vector store setup** (`app/rag/retrieval.py`)
-  - Initialize FAISS or Chroma
+  - Initialize FAISS
   - Ingest curriculum documents
   - Test retrieval (5 sample queries per subject)
 
@@ -242,7 +236,9 @@
 
 - [ ] **Core workflow nodes** (`app/graph/nodes.py`, `app/graph/workflow.py`)
   - `retrieve_context_node()` → `generate_questions_node()` → `validate_questions_node()` → `save_node()`
-  - **No teacher approval workflow** (MVP: auto-approve after validation)
+  - **Automated validation workflow** (MVP: no teacher approval)
+  - Questions that pass validation are stored with status `validated`.
+  - Questions that fail validation are stored with status `rejected`.
   - No conditional routing complexity
 
 ### 2.6 Authentication & Core API (Backend Team)
@@ -274,13 +270,14 @@
 ### 2.7 Support Services (Backend Team)
 
 - [ ] **Exam service** (`app/services/exam_service.py`)
-  - Create exam (select random approved questions)
+  - Create exam (select random validated questions)
   - Submit & auto-evaluate (MCQ: exact match, Numerical: tolerance ±5%)
   - Calculate topic performance
 
 - [ ] **Analytics service** (`app/services/analytics_service.py`)
   - Calculate performance per topic
   - Identify weak topics (score < 60%)
+  - Return weak-topic data for the student dashboard; personalized recommendations are Post-MVP
 
 - [ ] **Main FastAPI app** (`app/main.py`)
   ```bash
@@ -298,21 +295,18 @@
   frontend/
   ├── streamlit_app.py          # Main entry point
   ├── pages/
-  │   ├── 1_Student_Dashboard.py
-  │   ├── 2_Practice_Exam.py
-  │   ├── 3_Exam_Results.py
-  │   ├── 4_Weak_Areas.py
-  │   ├── 5_Teacher_Dashboard.py
-  │   ├── 6_Generate_Questions.py
-  │   ├── 7_Review_Questions.py
-  │   └── 8_Class_Analytics.py
+  │   ├── 1_Dashboard.py        # Student/teacher home
+  │   ├── 2_Exam.py             # Practice exam flow
+  │   ├── 3_Results.py          # Exam results and feedback
+  │   ├── 4_Teacher.py          # Basic teacher statistics
+  │   └── 5_Generate.py         # Teacher question generation
   └── components/
       ├── sidebar.py
       ├── auth_widgets.py
       └── charts.py
   ```
 
-### 5.2 Authentication & Session Management
+### 3.2 Authentication & Session Management
 
 - [ ] **Build auth UI** (`frontend/components/auth_widgets.py`)
   - [ ] Login form
@@ -324,39 +318,13 @@
   - User info display
   - Logout button
 
-### 5.3 Student Pages
+### 3.3 Student Pages (MVP Only)
 
-- [ ] **Student Dashboard** (`pages/1_Student_Dashboard.py`)
-  - [ ] Display user stats (total exams, avg score, strong/weak topics)
-  - [ ] Quick action buttons (Take Exam, Practice Weak Areas)
-  - [ ] Recent attempts list
-
-- [ ] **Practice Exam Page** (`pages/2_Practice_Exam.py`)
-  - [ ] Subject & chapter selection
-  - [ ] Difficulty picker
-  - [ ] Question type selector
-  - [ ] Question count & time limit
-  - [ ] "Generate Exam" button
-  - [ ] Display exam questions with timer
-  - [ ] Answer submission form
-
-- [ ] **Exam Results Page** (`pages/3_Exam_Results.py`)
-  - [ ] Overall score & performance breakdown
-  - [ ] Topic-wise performance table
-  - [ ] Question review (Q&A with explanations)
-  - [ ] Download results PDF
-
-- [ ] **Weak Areas Page** (`pages/4_Weak_Areas.py`)
-  - [ ] Display identified weak topics
-  - [ ] Coach recommendations
-
-### 3.2 Student Pages (MVP Only)
-
-- [ ] **Student Dashboard** (`pages/1_Student_Dashboard.py`)
+- [ ] **Student Dashboard** (`pages/1_Dashboard.py`)
   - User stats (total exams, avg score)
   - Quick action button: "Take Exam"
 
-- [ ] **Practice Exam Page** (`pages/2_Practice_Exam.py`)
+- [ ] **Practice Exam Page** (`pages/2_Exam.py`)
   - Subject & chapter dropdown
   - Difficulty: Easy/Medium/Hard
   - Question count slider
@@ -364,25 +332,25 @@
   - Display MCQ/Numerical questions
   - Answer submission form
 
-- [ ] **Exam Results Page** (`pages/3_Exam_Results.py`)
+- [ ] **Exam Results Page** (`pages/3_Results.py`)
   - Overall score & percentage
   - Topic-wise performance table
   - Question review (Q&A)
 
-### 3.3 Teacher Pages (Minimal MVP)
+### 3.4 Teacher Pages (Minimal MVP)
 
-- [ ] **Teacher Dashboard** (`pages/4_Teacher_Dashboard.py`)
-  - Class stats (total students, avg score)
+- [ ] **Teacher Dashboard** (`pages/4_Teacher.py`)
+  - Basic class statistics (student count, average score)
   - Quick action button: "Generate Questions"
 
-- [ ] **Generate Questions Page** (`pages/5_Generate_Questions.py`)
+- [ ] **Generate Questions Page** (`pages/5_Generate.py`)
   - Subject, chapter, topic dropdowns
   - Difficulty picker
   - Question count slider
   - "Generate Questions" button (calls API)
   - Preview generated questions
 
-### 3.4 Streamlit Configuration & Testing
+### 3.5 Streamlit Configuration & Testing
 
 - [ ] **Setup authentication** (`frontend/components/auth_widgets.py`)
   - Simple login/register form
@@ -406,7 +374,7 @@
   streamlit run frontend/streamlit_app.py --server.port 8501
   ```
 
-### 3.5 Integration Testing (Parallel with Frontend)
+### 3.6 Integration Testing (Parallel with Frontend)
 
 - [ ] **API + Frontend Integration Tests**
   - [ ] Register flow → Login → Navigate pages
@@ -429,7 +397,7 @@
   - [ ] Test question generation (valid JSON, schema compliance)
   - [ ] Test exam evaluation (MCQ auto-scoring, Numerical tolerance)
   - [ ] Test analytics (performance calculation)
-  - Target: 70%+ code coverage
+  - Target: 60%+ code coverage, with all critical-path flows tested
 
 - [ ] **Run test suite**
   ```bash
@@ -459,7 +427,7 @@
 
 - [ ] **Create test data**
   - 2 test students, 1 test teacher
-  - 50 pre-generated questions (approved)
+  - 50 pre-generated questions (validated)
   - 5 sample exam attempts
 
 - [ ] **Validation checklist**
@@ -488,7 +456,7 @@
   COPY requirements.txt .
   RUN pip install -r requirements.txt
   COPY . .
-  EXPOSE 8000 8501
+  EXPOSE 8000
   CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
   ```
 
@@ -497,7 +465,7 @@
   - Deploy backend service (uvicorn)
   - Deploy frontend service (Streamlit)
   - Run migrations: `alembic upgrade head`
-  - Ingest curriculum: `python scripts/ingest_curriculum.py`
+  - Ingest curriculum: `python scripts/ingest_curriculum.py --all`
   - Verify endpoints work in production
 
 - [ ] **Post-deployment checks**
@@ -516,7 +484,7 @@
 - [ ] **Documentation for Post-MVP**
   - [ ] Features to add (short answer, long answer, competency-based)
   - [ ] Performance optimizations
-  - [ ] Teacher approval workflow
+  - [ ] Teacher review and approval workflow
   - [ ] Advanced analytics (trends, badges)
 
 ---
@@ -525,59 +493,7 @@
 
 ### Week 1
 - **End of Day 3:** Project setup complete, all environments ready
-- **End of Day 5:** RAG pipeline ingesting curriculum, LangGraph workflow scaffolded
-- **Progress check:** Can retrieve curriculum context, LLM responds with JSON
-
-### Week 2
-- **End of Day 8:** Question generator & validator working, API endpoints operational
-- **End of Day 10:** Frontend scaffolding complete, can call backend APIs
-- **Progress check:** Can generate MCQ questions, auto-evaluate exam, view results
-
-### Week 3
-- **End of Day 13:** All student pages working (dashboard, exam, results)
-- **End of Day 15:** Teacher pages working, integration tests passing
-- **Progress check:** Full workflow works end-to-end (register → exam → results)
-
-### Week 4
-- **End of Day 18:** Bug fixes, demo data loaded, performance tuned
-- **End of Day 20:** Deployed to cloud, live demo ready
-- **Final:** MVP shipped & deployable
-
----
-  - [ ] Run database migrations
-  - [ ] Ingest curriculum documents
-  - [ ] Test endpoints on production
-
-   - Run migrations: `alembic upgrade head`
-  - Ingest curriculum: `python scripts/ingest_curriculum.py`
-  - Verify endpoints work in production
-
-- [ ] **Post-deployment checks**
-  - Test login on production
-  - Generate sample exam
-  - Verify scoring
-  - Check error logs
-
-### 4.5 Final Demo & Handoff
-
-- [ ] **Live demo** (15-20 minutes)
-  - Show student exam generation → scoring → weak areas
-  - Show teacher question generation → validation
-  - Live API Swagger UI (FastAPI docs)
-
-- [ ] **Documentation for Post-MVP**
-  - [ ] Features to add (short answer, long answer, competency-based)
-  - [ ] Performance optimizations
-  - [ ] Teacher approval workflow
-  - [ ] Advanced analytics (trends, badges)
-
----
-
-## 4-Week Milestone Schedule
-
-### Week 1
-- **End of Day 3:** Project setup complete, all environments ready
-- **End of Day 5:** RAG pipeline ingesting curriculum, LangGraph workflow scaffolded
+- **End of Day 5:** Curriculum ingestion and retrieval prototype working; LangGraph interfaces defined
 - **Progress check:** Can retrieve curriculum context, LLM responds with JSON
 
 ### Week 2
@@ -655,7 +571,7 @@ AI-Fellows/
 - Short answer questions (need LLM grading)
 - Long answer questions (complex validation)
 - Competency-based questions
-- Teacher approval workflow
+- Teacher review and approval workflow
 - Advanced analytics (trends, growth, badges)
 - Student personalization recommendations
 - Detailed learning coach workflow
@@ -677,7 +593,7 @@ AI-Fellows/
 | **Database** | SQLAlchemy | 2.0.23 | ORM |
 | | psycopg2-binary | 2.9.9 | PostgreSQL driver |
 | | Alembic | 1.13.0 | Migrations |
-| **Document Processing** | PyPDF2 | 3.17.0 | PDF parsing |
+| **Document Processing** | pypdf | 4.0.0 | PDF parsing |
 | **Validation** | Pydantic | 2.5.0 | Schema validation |
 | **Security** | python-jose | 3.3.0 | JWT |
 | | bcrypt | 4.1.1 | Password hashing |
@@ -696,16 +612,16 @@ AI-Fellows/
 - [ ] ✅ Student sees score, topic performance, & explanations
 - [ ] ✅ System identifies weak topics (score < 60%)
 - [ ] ✅ Teacher can generate questions  
-- [ ] ✅ Teacher can view class overview
+- [ ] ✅ Teacher can view basic class statistics
 - [ ] ✅ Deployed to cloud & accessible
 - [ ] ✅ Live demo working (register → exam → results)
 
 ### Quality Metrics
 - [ ] API response time < 2 seconds (excluding LLM)
-- [ ] Question generation accuracy ≥ 80%
-- [ ] Vector retrieval working (5 subjects tested)
+- [ ] Question generation accuracy ≥ 80% on a manually reviewed holdout set
+- [ ] Vector retrieval working across Physics and Mathematics curriculum
 - [ ] Auto-evaluation 100% accurate (MCQ/Numerical)
-- [ ] Test coverage ≥ 60%
+- [ ] Test coverage ≥ 60%, including all critical-path flows
 
 ### Demo Requirements
 - [ ] Live system (not pre-recorded)
@@ -723,7 +639,7 @@ AI-Fellows/
 | LLM API issues | High | Have mock responses ready, test early & often |
 | Vector DB not working | High | Test RAG pipeline by Day 3 of Week 1 |
 | Database schema issues | Medium | Use Alembic, test migrations weekly |
-| Scope creep (trying to do too much) | Critical | Strict MVP definition, defer teacher approval & complex grading |
+| Scope creep (trying to do too much) | Critical | Strict MVP definition, defer teacher review, recommendations, and complex grading |
 | Team falling behind | High | Daily standups, daily integration checks, parallel execution |
 | Deployment failures | Medium | Docker setup early, test cloud deployment by Week 3 |
 
@@ -780,6 +696,6 @@ pytest tests/ -v --cov=app
 ## Document Version
 
 **Version:** 2.0 (Compressed from 6 weeks to 4 weeks)  
-**Last Updated:** 2026-08-18  
+**Last Updated:** 2026-08-20  
 **Status:** Ready for Execution  
 **Author:** Tech Lead
