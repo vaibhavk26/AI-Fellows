@@ -14,6 +14,12 @@
 
 **Database decision:** Use PostgreSQL locally, for integration tests, and in production. This keeps all environments on the same database engine and avoids dialect-specific behavior during the four-week implementation.
 
+## Execution Guide
+
+Use this document for MVP scope, implementation phases, team ownership, milestones, risks, and delivery criteria.
+
+For exact setup commands, PostgreSQL operations, validation gates, AI coding-tool prompts, and run instructions, follow the [Capstone Development Runbook](capstone-development-runbook.md).
+
 ---
 
 ## Phase 1: Setup & Infrastructure (Week 1)
@@ -47,7 +53,7 @@
 
 - [ ] **Create documentation files**
   - [ ] `docs/TEAM_ROLES.md` — developer assignments
-  - [ ] `docs/SETUP.md` — local dev environment guide
+  - [ ] `docs/capstone-development-runbook.md` — local setup and execution guide
   - [ ] `docs/API_DESIGN.md` — API contracts
   - [ ] `CONTRIBUTING.md` — team workflow
 
@@ -523,7 +529,7 @@ AI-Fellows/
 │   ├── capstone-architecture.md
 │   ├── capstone-technical-design.md
 │   ├── capstone-implementation-plan.md
-│   └── SETUP.md
+│   └── capstone-development-runbook.md
 │
 ├── capstone/
 │   ├── app/
