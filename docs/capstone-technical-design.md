@@ -23,11 +23,11 @@ The design emphasizes a simple, practical MVP that is built using Python and ope
 
 - Class 10 Physics and Mathematics
 - Initial chapters: Physics (Electricity, Light, Magnetic Effects of Electric Current) and Mathematics (Real Numbers, Quadratic Equations, Trigonometry, Statistics)
-- Question generation for MCQ, numerical, short answer, long answer, and competency-based questions
-- Teacher review and approval workflow
+- MVP question generation for MCQ and numerical questions
+- Short answer, long answer, competency-based questions, and teacher review are post-MVP extensions
 - Student exam generation and submission
-- Weak-topic detection and targeted practice generation
-- PostgreSQL-backed persistence
+- Weak-topic detection for the MVP; targeted practice generation is a post-MVP extension
+- PostgreSQL-backed persistence in local development, testing, and production
 - Vector database for retrieval
 - Python-based implementation with open-source tools
 
@@ -54,8 +54,8 @@ The system is structured into five major layers:
 
 3. AI Layer
    - LangChain RAG retrieval and prompt orchestration
-   - LangGraph workflow orchestration for generation, validation, review, and personalization
-   - Question generator, validator, and learning coach
+- LangGraph workflow orchestration for generation and validation
+- Question generator and validator for the MVP; review and learning-coach workflows are post-MVP
 
 4. Data Layer
    - PostgreSQL and vector database
@@ -779,7 +779,7 @@ Focus areas:
 
 Test flows:
 - teacher generates a question set
-- teacher approves a question
+- automated validation stores valid questions with status `validated`
 - student generates an exam
 - student submits answers
 - performance metrics update correctly
@@ -795,7 +795,7 @@ Test flows:
 
 - pytest
 - FastAPI TestClient
-- SQLite for simple tests or PostgreSQL for integration testing
+- PostgreSQL test database (`capstone_test`) for unit and integration tests
 
 ---
 
@@ -813,7 +813,7 @@ For the capstone MVP, deployment should stay lightweight.
 
 ### 12.2 Containerization
 
-Use Docker to package the app for easier local execution and future deployment.
+Use Docker to package the app for cloud deployment. Local development runs directly in a Python virtual environment with PostgreSQL installed locally.
 
 Suggested container layout:
 - app/frontend
