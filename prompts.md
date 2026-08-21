@@ -88,3 +88,32 @@ Generate a detailed API design document for the capstone project.
 
 **Output File Name:**  
 `docs/capstone-api-design.md`
+
+
+### PROMPT-6 : Database Design generation 
+**Task:**  
+Generate a detailed Database design document for the capstone project.
+
+**Reference Documents:**  
+- `docs/capstone-proposal.md`  
+- `docs/capstone-requirements.md`  
+- `docs/capstone-architecture.md`  
+- `docs/capstone-technical-design.md`  
+- `docs/capstone-development-runbook.md`
+- `docs/capstone-api-design.md`  
+
+**Guidelines:**  
+- Produce a clean, structured, detailed database design document.  
+- Ensure the design is actionable and ready for implementation (no placeholders or vague text).  
+- Ensure that it is in sync with API design 
+- Align with the capstone architecture and requirements provided in the reference documents.  
+
+**Output Formatting Requirements:**  
+- Output MUST be in clean Markdown.  
+- Use headings, subheadings, bullet points, and checkboxes where appropriate.  
+- No filler text.  
+- No generic advice.  
+- The document should be developer-ready.  
+
+**Output File Name:**  
+`docs/capstone-database-design.md`
