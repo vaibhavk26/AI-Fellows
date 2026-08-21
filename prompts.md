@@ -61,3 +61,30 @@ Output Formatting requirements
 - Output File Name : docs/capstone-implementation-plan.md
 
 
+### PROMPT-5 : API Design generation 
+**Task:**  
+Generate a detailed API design document for the capstone project.
+
+**Reference Documents:**  
+- `docs/capstone-proposal.md`  
+- `docs/capstone-requirements.md`  
+- `docs/capstone-architecture.md`  
+- `docs/capstone-technical-design.md`  
+- `docs/capstone-development-runbook.md`  
+
+**Guidelines:**  
+- Produce a clean, structured, detailed API design document.  
+- Base the design on a FastAPI implementation.  
+- Ensure the design is actionable and ready for implementation (no placeholders or vague text).  
+- Incorporate endpoints, request/response schemas, authentication, error handling, and versioning strategy.  
+- Align with the capstone architecture and requirements provided in the reference documents.  
+
+**Output Formatting Requirements:**  
+- Output MUST be in clean Markdown.  
+- Use headings, subheadings, bullet points, and checkboxes where appropriate.  
+- No filler text.  
+- No generic advice.  
+- The document should be developer-ready.  
+
+**Output File Name:**  
+`docs/capstone-api-design.md`
