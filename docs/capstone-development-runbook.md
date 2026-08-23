@@ -140,6 +140,7 @@ capstone/
 │   ├── core/
 │   ├── api/
 │   │   ├── endpoints/
+│   │   ├── dependencies/
 │   │   └── schemas/
 │   ├── db/
 │   │   ├── models/
