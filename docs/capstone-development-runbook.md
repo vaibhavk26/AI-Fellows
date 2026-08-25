@@ -242,17 +242,33 @@ Only continue after API_DESIGN.md and DATABASE_SCHEMA.md are drafted and reviewe
 
 ## 8. Bootstrapping and Health Validation
 
-From the capstone/ directory:
+From the capstone/ directory, confirm that the existing Alembic setup is present:
 
 ```powershell
-alembic init alembic
-uvicorn app.main:app --reload --port 8000
+Test-Path .\alembic
+Test-Path .\alembic.ini
 ```
 
-Test the initial app health endpoint:
+Both commands should return `True`. Do not run `alembic init alembic`; Alembic is already initialized in this repository. That command is only needed when setting up Alembic in a brand-new project.
+
+Start the API:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+In a second PowerShell terminal, from the `capstone/` directory, call the health endpoint:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8000/health -Method Get
+```
+
+Expected response:
 
 ```text
-GET /health -> {"status": "ok"}
+status
+------
+ok
 ```
 
 Open the Swagger docs at http://localhost:8000/docs.
