@@ -42,9 +42,13 @@ git status
 
 If psql is not recognized, add the PostgreSQL bin directory to PATH or use SQL Shell (psql).
 
+For virtual environment creation, dependency installation, database setup, and starting the app, refer to the [capstone/SETUP.md](../capstone/SETUP.md) quick-start guide.
+
 ## 2.1 Dependency Baseline
 
 Use the following dependency baseline for the MVP before implementation starts:
+
+The installation commands are in the [capstone/SETUP.md](../capstone/SETUP.md) quick-start guide; this section defines the approved package versions.
 
 ```text
 fastapi==0.104.1
@@ -104,6 +108,8 @@ __pycache__/
 
 ## 3. Create PostgreSQL Databases
 
+Completed on 2026-08-25.
+
 Use a PostgreSQL admin account to create the required databases.
 
 ```sql
@@ -120,6 +126,8 @@ psql -U capstone_user -d capstone_test -c "SELECT current_database();"
 ```
 
 ## 4. Create the Project Scaffold
+
+Completed on 2026-08-25.
 
 From the repository root:
 
@@ -182,6 +190,8 @@ Optional project supporting docs may still live inside the capstone folder if th
 ## 6. Install Dependencies and Configure Env
 
 Create requirements.txt based on the approved dependency list, then run:
+
+For the complete local setup sequence, including virtual environment creation and activation, start with the [capstone/SETUP.md](../capstone/SETUP.md) quick-start guide.
 
 ```powershell
 python -m pip install --upgrade pip
@@ -400,4 +410,5 @@ Feature implementation may begin only when all of the following are true:
 
 - [capstone-implementation-plan.md](capstone-implementation-plan.md) defines the product intent, architecture, scope, and release criteria.
 - This runbook defines the exact execution path to realize that plan.
+- [capstone/SETUP.md](../capstone/SETUP.md) is the quick-start guide for local environment, dependency, database, and application startup commands.
 - If a decision conflicts, the plan wins; the runbook is updated to match it.

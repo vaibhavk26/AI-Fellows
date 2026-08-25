@@ -3,6 +3,7 @@
 ## Local environment
 
 ```powershell
+cd .\capstone
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
