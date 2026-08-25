@@ -13,11 +13,7 @@ Production uses a separate, hosted database and is not created on a developer ma
 
 Open PowerShell and install PostgreSQL with Windows Package Manager:
 
-```powershell
-winget install PostgreSQL.PostgreSQL
-```
-
-If `winget` is unavailable or cannot locate the package, download the Windows installer from [PostgreSQL Downloads](https://www.postgresql.org/download/windows/).
+Download the Windows installer from [PostgreSQL Downloads](https://www.postgresql.org/download/windows/).
 
 In the installer:
 
@@ -34,11 +30,21 @@ Close and reopen PowerShell, then run:
 Get-Service postgresql*
 ```
 
-The PostgreSQL service should have a status of `Running`. If it is stopped, start it:
+The PostgreSQL service should have a status of `Running`. 
+
+If it is stopped, start it using below command:
 
 ```powershell
 Get-Service postgresql* | Start-Service
 ```
+
+If you wan to stop PostgreSQL service, use below command.
+
+```powershell
+Get-Service postgresql* | Stop-Service
+```
+**IMPORTANT** - For starting or stopping PostgreSQL service, powershell must be **Run as Administrator**  
+
 
 ## 3. Connect as the PostgreSQL administrator
 
