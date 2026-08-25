@@ -25,12 +25,12 @@ This runbook assumes the following decisions from the implementation plan:
 
 ## 2. Prerequisites
 
-Verify the development machine is ready:
+Completed on 2026-08-25:
 
-- Python 3.11 or newer installed
-- PostgreSQL installed and running locally
-- psql available in PowerShell
-- Git and VS Code installed
+- [x] Python 3.11 or newer installed
+- [x] PostgreSQL installed and running locally
+- [x] psql available in PowerShell
+- [x] Git and VS Code installed
 
 Run:
 
