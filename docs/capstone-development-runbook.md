@@ -11,6 +11,26 @@ The authoritative design references for the project are:
 
 These files are the source of truth for API contracts and database design. Do not create duplicate root-level copies of the same contract or schema documents during implementation.
 
+## 0. Current Status
+
+Last updated 2026-08-27.
+
+Completed:
+
+- [x] Prerequisites (Section 2) and PostgreSQL databases (Section 3) — 2026-08-25
+- [x] Project scaffold (Section 4) — 2026-08-25
+- [x] SQLAlchemy models for all MVP and extension tables in [capstone-database-design.md](capstone-database-design.md) section 6/22
+- [x] Alembic initialized (`alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/`) and initial migration `6f0e6720530e_initial_mvp_schema.py` generated and applied to both `capstone` and `capstone_test` (Section 9)
+- [x] `/health` returns HTTP 200 on the running FastAPI app (Section 8), though it does not yet verify a live database connection — see Next Steps
+
+Not yet done:
+
+- [ ] Seed data for Subjects/Chapters (intentionally deferred; see Section 9)
+- [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values, so the Section 14 completion gate item is not yet satisfied
+- [ ] Auth, Pydantic schemas, and remaining endpoints (Implementation Sequence steps 4-12 in Section 10)
+
+Next step: continue with Implementation Sequence (Section 10), step 4 — implement auth and Pydantic schemas — since step 3 (models and initial migration) is complete.
+
 ## 1. Working Assumptions
 
 This runbook assumes the following decisions from the implementation plan:
@@ -281,10 +301,14 @@ The gate is complete only when:
 
 ## 9. Database Migration Sequence
 
-Implement models from the schema, then run:
+Completed on 2026-08-27: models implemented for every table in [capstone-database-design.md](capstone-database-design.md) section 6/22 (core MVP plus extension tables), and the initial migration `6f0e6720530e_initial_mvp_schema.py` was generated, reviewed (pgcrypto extension added manually; autogenerate does not detect it), and applied to both `capstone` and `capstone_test`. Seed data for Subjects/Chapters was intentionally excluded from this migration and is deferred to a later, separate migration or `scripts/ingest_curriculum.py`.
+
+For teammates pulling these changes, the exact commands to apply the migration locally are in the [capstone/SETUP.md](../capstone/SETUP.md) "Database migrations" section — run this after every `git pull` that changes `alembic/versions/`, since applying a migration is a local, per-database action that git cannot distribute.
+
+Summary of the sequence used for the initial migration (for reference when adding future migrations):
 
 ```powershell
-alembic revision --autogenerate -m "Initial MVP schema"
+alembic revision --autogenerate -m "<description>"
 alembic upgrade head
 $env:DATABASE_URL=$env:TEST_DATABASE_URL
 alembic upgrade head
@@ -296,68 +320,59 @@ Do not proceed until both databases are migrated successfully.
 
 ## 10. Implementation Sequence
 
-Build in this order:
+Build in this order. Each step names the primary files to add or modify under `capstone/app/` (packages already scaffolded per Section 4) and its hard dependencies. Endpoint/response contracts are defined in [capstone-api-design.md](capstone-api-design.md); do not invent request/response shapes ad hoc. Steps are grouped below by area for scannability, but the numbering (1-12) is one continuous sequence and dependency references (e.g. "depends on step 4") refer to that single sequence, not the subheadings.
 
-1. Pydantic schemas
-2. password hashing and JWT utilities
-3. register, login, current-user endpoints
-4. question generation and retrieval endpoints
-5. exam creation, submission, results endpoints
-6. weak-topic and performance endpoints
-7. RAG ingestion and FAISS retrieval
-8. LangGraph generation + validation workflow
-9. exam scoring and analytics service logic
-10. Streamlit pages and frontend flow
-11. unit and integration tests
-12. production readiness checks
+### 10.1 Authentication Foundation (backend lead)
 
-## 11. RAG and AI Workflow
+1. **Pydantic schemas** — extend `app/api/schemas/base.py` and `app/api/schemas/auth.py`; add `question.py`, `exam.py`, `attempt.py`, `analytics.py`. Depends on: Section 9 models (complete).
+2. **password hashing and JWT utilities** — add security helpers (e.g. `app/core/security.py`) for Argon2/bcrypt hashing and JWT encode/decode, per API design section 3.1. Depends on: step 1 for the payload/token schemas.
+3. **register, login, current-user endpoints** — `app/api/endpoints/auth.py` + `app/services/auth_service.py` + a bearer-token dependency in `app/api/dependencies/auth.py` (currently a placeholder). Implements API design section 3.3. Depends on: steps 1-2.
 
-Required implementation details:
+### 10.2 Question, Exam, and Analytics API (backend lead)
 
-- add curriculum PDF groups and subject/chapter/topic metadata
-- extract text using pypdf
-- chunk with roughly 512 tokens and 100-token overlap
-- generate embeddings with sentence-transformers
-- persist and query a FAISS index
-- test at least five retrieval queries per subject
-- generate MCQ and numerical questions only
-- validate relevance, schema, difficulty, answer data, and duplicate detection
-- store valid questions as validated and invalid ones as rejected
+4. **question generation and retrieval endpoints** — `app/api/endpoints/questions.py` + `app/services/question_service.py`. Split this step in two:
+   - *Retrieval* (`GET /questions`, `GET /questions/{id}`) only needs steps 1-3 and existing rows; build and test this now.
+   - *Generation* (`POST /questions/generate`) is a thin endpoint that delegates to the RAG/LangGraph pipeline built in step 7-8 below — it has no real implementation until those steps exist. Stub it (e.g. return `501 Not Implemented` or a mocked response) if you need to unblock frontend/exam work sooner; do not consider step 4 complete until the real pipeline is wired in.
+5. **exam creation, submission, results endpoints** — `app/api/endpoints/exams.py` + `app/services/exam_service.py`. Depends on: step 4's retrieval (exam generation selects from `validated` questions only, per [capstone-database-design.md](capstone-database-design.md) section 9).
+6. **weak-topic and performance endpoints** — extend `app/api/endpoints/analytics.py` + `app/services/analytics_service.py`. Depends on: step 5, since `topic_performance` is populated by attempt submission.
 
-Workflow:
+### 10.3 RAG and AI Generation Pipeline (AI lead)
 
-```text
-retrieve_context -> generate_questions -> validate_questions -> save
-```
+7. **RAG ingestion and FAISS retrieval** — implement inside `app/rag/` (currently an empty package). This is the real blocker for step 4's generation endpoint. Required details:
+   - add curriculum PDF groups and subject/chapter/topic metadata (feeds `curriculum_documents`/`source_references` per [capstone-database-design.md](capstone-database-design.md) section 6)
+   - extract text using pypdf
+   - chunk with roughly 512 tokens and 100-token overlap
+   - generate embeddings with sentence-transformers
+   - persist and query a FAISS index (`VECTOR_DB_PATH` from `.env.local`) — ingestion entry point is `scripts/ingest_curriculum.py` (currently a placeholder)
+   - test at least five retrieval queries per subject
+8. **LangGraph generation + validation workflow** — implement inside `app/graph/` and `app/agents/` (both currently empty packages). Completes step 4's generation endpoint end to end. Required details:
+   - generate MCQ and numerical questions only
+   - validate relevance, schema, difficulty, answer data, and duplicate detection
+   - store valid questions as validated and invalid ones as rejected, persisting `question_validation_results` rows per question generation run
+   - workflow: `retrieve_context -> generate_questions -> validate_questions -> save`
+   - do not add teacher approval or learning-coach routing in the MVP
 
-Do not add teacher approval or learning-coach routing in the MVP.
+### 10.4 Scoring and Analytics Logic (backend lead)
 
-## 12. Frontend Validation Flow
+9. **exam scoring and analytics service logic** — finalize scoring rules (exact-match MCQ, ±5% numerical tolerance) inside `app/services/exam_service.py` and `app/services/analytics_service.py`, per the attempt-submission contract in the API design doc.
 
-The frontend gate is complete when this user flow works end-to-end:
+### 10.5 Frontend (frontend lead)
 
-```text
-register -> login -> choose topic -> generate exam -> submit answers -> view results
-```
+10. **Streamlit pages and frontend flow** — `frontend/pages/1_Dashboard.py` through `5_Generate.py` and `frontend/components/sidebar.py` (all currently scaffolded but empty). Depends on steps 1-9 for the endpoints each page calls (a page can be stubbed against mocked data earlier, but the end-to-end flow below requires the real backend):
+    - `1_Dashboard.py` -> weak-topic / progress summary (step 6)
+    - `2_Exam.py` -> attempt an exam (step 5)
+    - `3_Results.py` -> attempt results and explanations (step 9)
+    - `4_Teacher.py` -> teacher question bank view (step 4 retrieval)
+    - `5_Generate.py` -> trigger question generation (step 4 generation, needs steps 7-8)
+    - Gate: the end-to-end flow `register -> login -> choose topic -> generate exam -> submit answers -> view results` must work.
+    - Run from `capstone/` with `streamlit run frontend/streamlit_app.py --server.port 8501`.
 
-The app should include these pages:
+### 10.6 Tests and Production Readiness (QA lead / DevOps lead)
 
-```text
-frontend/pages/1_Dashboard.py
-frontend/pages/2_Exam.py
-frontend/pages/3_Results.py
-frontend/pages/4_Teacher.py
-frontend/pages/5_Generate.py
-```
+11. **unit and integration tests** — `tests/unit/`, `tests/integration/` (health tests already exist as a template: `tests/unit/test_health.py`, `tests/integration/test_health_integration.py`). See Section 11 (Test and Quality Gates) below.
+12. **production readiness checks** — see Section 12 (Deployment Gate) below.
 
-Run from capstone/ with:
-
-```powershell
-streamlit run frontend/streamlit_app.py --server.port 8501
-```
-
-## 13. Test and Quality Gates
+## 11. Test and Quality Gates
 
 Run:
 
@@ -377,7 +392,7 @@ Required quality checks:
 - numerical scoring uses ±5% tolerance
 - weak-topic calculation is reproducible
 
-## 14. Deployment Gate
+## 12. Deployment Gate
 
 Only after local validation succeeds:
 
@@ -391,7 +406,7 @@ Only after local validation succeeds:
 
 Local development continues to use the virtual environment and PostgreSQL. Docker is reserved for deployment, not local development.
 
-## 15. AI Prompt Sequence
+## 13. AI Prompt Sequence
 
 Use separate prompts and validate after each one:
 
@@ -408,21 +423,21 @@ Use separate prompts and validate after each one:
 
 Each prompt should name the files it may change, the contract it must follow, and the validation command to run after the change.
 
-## 16. Completion Gate
+## 14. Completion Gate
 
 Feature implementation may begin only when all of the following are true:
 
-- PostgreSQL capstone and capstone_test are reachable
-- project scaffold exists under capstone/
-- .env.local is ignored by Git
-- API_DESIGN.md is complete
-- DATABASE_SCHEMA.md is complete
-- FastAPI /health passes
-- Alembic migration applies to both databases
-- LLM provider and model are recorded in SETUP.md
-- backend, frontend, AI, and QA ownership are assigned
+- [x] PostgreSQL capstone and capstone_test are reachable
+- [x] project scaffold exists under capstone/
+- [x] .env.local is ignored by Git
+- [x] API_DESIGN.md is complete ([capstone-api-design.md](capstone-api-design.md))
+- [x] DATABASE_SCHEMA.md is complete ([capstone-database-design.md](capstone-database-design.md))
+- [x] FastAPI /health passes (see Section 0 note: does not yet verify DB connectivity)
+- [x] Alembic migration applies to both databases (Section 9, completed 2026-08-27)
+- [ ] LLM provider and model are recorded in SETUP.md — outstanding; `.env.example` still has placeholder values
+- [ ] backend, frontend, AI, and QA ownership are assigned — [TEAM_ROLES.md](../capstone/TEAM_ROLES.md) defines roles but no individuals are assigned yet
 
-## 17. Documentation Relationship
+## 15. Documentation Relationship
 
 - [capstone-implementation-plan.md](capstone-implementation-plan.md) defines the product intent, architecture, scope, and release criteria.
 - This runbook defines the exact execution path to realize that plan.
