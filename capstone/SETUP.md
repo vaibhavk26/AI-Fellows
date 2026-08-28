@@ -15,6 +15,15 @@ pip install -r requirements.txt
 Copy `.env.example` to `.env.local` and configure the values for the local PostgreSQL and LLM setup.
 
 ## Database setup
+'''Start PostgreSQL
+'''Open PowerShell as Administrator:
+Get-Service *postgres*
+
+'''Find the service name, such as postgresql-x64-18, then start it:
+Start-Service postgresql-x64-18
+
+'''Open PostgreSQL’s SQL shell. Enter password set at the time of database creation when prompted to enter password.
+psql -U postgres -h localhost
 
 ```sql
 CREATE USER capstone_user WITH PASSWORD 'replace-local-password';
