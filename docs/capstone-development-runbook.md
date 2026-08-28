@@ -20,12 +20,12 @@ Completed:
 - [x] Prerequisites (Section 2) and PostgreSQL databases (Section 3) — 2026-08-25
 - [x] Project scaffold (Section 4) — 2026-08-25
 - [x] SQLAlchemy models for all MVP and extension tables in [capstone-database-design.md](capstone-database-design.md) section 6/22
-- [x] Alembic initialized (`alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/`) and initial migration `6f0e6720530e_initial_mvp_schema.py` generated and applied to both `capstone` and `capstone_test` (Section 9)
+- [x] Alembic initialized (`alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/`) and initial migration `6f0e6720530e_initial_mvp_schema.py` generated and applied to both `capstone` and `capstone_test` (Section 9.1)
+- [x] Seed data for Subjects/Chapters loaded into both `capstone` and `capstone_test` via `scripts/seed_reference_data.py` (Section 9.2) — 2026-08-28
 - [x] `/health` returns HTTP 200 on the running FastAPI app (Section 8), though it does not yet verify a live database connection — see Next Steps
 
 Not yet done:
 
-- [ ] Seed data for Subjects/Chapters (intentionally deferred; see Section 9)
 - [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values, so the Section 14 completion gate item is not yet satisfied
 - [ ] Auth, Pydantic schemas, and remaining endpoints (Implementation Sequence steps 4-12 in Section 10)
 
@@ -301,6 +301,8 @@ The gate is complete only when:
 
 ## 9. Database Migration Sequence
 
+### 9.1 Initial Migration
+
 Completed on 2026-08-27: models implemented for every table in [capstone-database-design.md](capstone-database-design.md) section 6/22 (core MVP plus extension tables), and the initial migration `6f0e6720530e_initial_mvp_schema.py` was generated, reviewed (pgcrypto extension added manually; autogenerate does not detect it), and applied to both `capstone` and `capstone_test`. Seed data for Subjects/Chapters was intentionally excluded from this migration and is deferred to a later, separate migration or `scripts/ingest_curriculum.py`.
 
 For teammates pulling these changes, the exact commands to apply the migration locally are in the [capstone/SETUP.md](../capstone/SETUP.md) "Database migrations" section — run this after every `git pull` that changes `alembic/versions/`, since applying a migration is a local, per-database action that git cannot distribute.
@@ -318,13 +320,21 @@ Restore the development DATABASE_URL after the test migration step.
 
 Do not proceed until both databases are migrated successfully.
 
+### 9.2 Seed Data for Subjects/Chapters
+
+Completed on 2026-08-28: `scripts/seed_reference_data.py` inserts the exact Subjects and Chapters rows from [capstone-database-design.md](capstone-database-design.md) section 17 using the SQLAlchemy session (`app/db/session.py`), and is idempotent (queries for an existing row by its unique key before inserting, so re-running is safe). It intentionally excludes the extension badge seed values, which are post-MVP/gamification-only per section 17.
+
+The exact commands to run it locally, against both `capstone` and `capstone_test`, are in the [capstone/SETUP.md](../capstone/SETUP.md) "Seed reference data" section — run this after migrations and before curriculum ingestion (`scripts/ingest_curriculum.py`), since Chapters foreign-key to Subjects and Topics foreign-key to Chapters. That same section also has the `psql`/SQLAlchemy commands to verify the row counts (2 subjects, 7 chapters) after seeding each database.
+
+Do not proceed to curriculum ingestion until this seed step has been run and verified against both databases.
+
 ## 10. Implementation Sequence
 
 Build in this order. Each step names the primary files to add or modify under `capstone/app/` (packages already scaffolded per Section 4) and its hard dependencies. Endpoint/response contracts are defined in [capstone-api-design.md](capstone-api-design.md); do not invent request/response shapes ad hoc. Steps are grouped below by area for scannability, but the numbering (1-12) is one continuous sequence and dependency references (e.g. "depends on step 4") refer to that single sequence, not the subheadings.
 
 ### 10.1 Authentication Foundation (backend lead)
 
-1. **Pydantic schemas** — extend `app/api/schemas/base.py` and `app/api/schemas/auth.py`; add `question.py`, `exam.py`, `attempt.py`, `analytics.py`. Depends on: Section 9 models (complete).
+1. **Pydantic schemas** — extend `app/api/schemas/base.py` and `app/api/schemas/auth.py`; add `question.py`, `exam.py`, `attempt.py`, `analytics.py`. Depends on: Section 9.1 models (complete).
 2. **password hashing and JWT utilities** — add security helpers (e.g. `app/core/security.py`) for Argon2/bcrypt hashing and JWT encode/decode, per API design section 3.1. Depends on: step 1 for the payload/token schemas.
 3. **register, login, current-user endpoints** — `app/api/endpoints/auth.py` + `app/services/auth_service.py` + a bearer-token dependency in `app/api/dependencies/auth.py` (currently a placeholder). Implements API design section 3.3. Depends on: steps 1-2.
 
@@ -433,7 +443,7 @@ Feature implementation may begin only when all of the following are true:
 - [x] API_DESIGN.md is complete ([capstone-api-design.md](capstone-api-design.md))
 - [x] DATABASE_SCHEMA.md is complete ([capstone-database-design.md](capstone-database-design.md))
 - [x] FastAPI /health passes (see Section 0 note: does not yet verify DB connectivity)
-- [x] Alembic migration applies to both databases (Section 9, completed 2026-08-27)
+- [x] Alembic migration applies to both databases (Section 9.1, completed 2026-08-27)
 - [ ] LLM provider and model are recorded in SETUP.md — outstanding; `.env.example` still has placeholder values
 - [ ] backend, frontend, AI, and QA ownership are assigned — [TEAM_ROLES.md](../capstone/TEAM_ROLES.md) defines roles but no individuals are assigned yet
 
