@@ -97,7 +97,35 @@ The `JWT_SECRET_KEY` in `.env.local` is loaded automatically from `app/core/conf
 JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production-12345678
 ```
 
-For production, regenerate a strong secret key.
+#### Generating JWT_SECRET_KEY
+
+The default placeholder is acceptable for **local development only**. For any shared environment (staging, production, or team dev), generate a cryptographically secure key.
+
+**Option 1: Python (Recommended)**
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**Option 2: OpenSSL**
+```powershell
+openssl rand -base64 32
+```
+
+**Option 3: Python token_hex**
+```powershell
+python -c "from secrets import token_hex; print(token_hex(32))"
+```
+
+Copy the generated key (without quotes) and update `.env.local`:
+```env
+JWT_SECRET_KEY=<paste-generated-key-here>
+```
+
+**For production deployments:**
+- Generate a fresh key using one of the above methods
+- Store in a secrets manager (AWS Secrets Manager, HashiCorp Vault, Kubernetes Secrets, etc.)
+- Never commit keys to version control
+- Rotate periodically (note: this invalidates existing tokens)
 
 ### Endpoints
 
