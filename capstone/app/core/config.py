@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     llm_provider: str = "openai-compatible"
     llm_model: str = "replace-with-approved-model"
     openai_api_key: str | None = None
+    jwt_secret_key: str = "your-secret-key-change-in-production"
 
     model_config = SettingsConfigDict(env_file=".env.local", extra="ignore")
 

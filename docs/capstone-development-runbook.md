@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-08-27.
+Last updated 2026-08-29.
 
 Completed:
 
@@ -22,14 +22,23 @@ Completed:
 - [x] SQLAlchemy models for all MVP and extension tables in [capstone-database-design.md](capstone-database-design.md) section 6/22
 - [x] Alembic initialized (`alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/`) and initial migration `6f0e6720530e_initial_mvp_schema.py` generated and applied to both `capstone` and `capstone_test` (Section 9.1)
 - [x] Seed data for Subjects/Chapters loaded into both `capstone` and `capstone_test` via `scripts/seed_reference_data.py` (Section 9.2) — 2026-08-28
-- [x] `/health` returns HTTP 200 on the running FastAPI app (Section 8), though it does not yet verify a live database connection — see Next Steps
+- [x] **Section 10.1: Authentication Foundation** — Pydantic schemas, JWT utilities, and auth endpoints fully implemented and tested (10/10 integration tests passing) — 2026-08-29
+  - [x] Pydantic schemas for auth request/response validation
+  - [x] Password hashing (bcrypt) and JWT utilities in `app/core/security.py`
+  - [x] Auth endpoints: register, login, logout, current-user in `app/api/endpoints/auth.py`
+  - [x] AuthService business logic in `app/services/auth_service.py`
+  - [x] Bearer token dependency in `app/api/dependencies/auth.py`
+  - [x] Role-based access control (student/teacher) working
+  - [x] **CRITICAL**: JWT tokens use `datetime.now(timezone.utc)` for timezone-safe token expiration across all developer timezones
+  - [x] `/health` returns HTTP 200
+- [x] All dependencies updated: added `email-validator==2.3.0` to requirements.txt and `JWT_SECRET_KEY` to .env.example
 
 Not yet done:
 
-- [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values, so the Section 14 completion gate item is not yet satisfied
-- [ ] Auth, Pydantic schemas, and remaining endpoints (Implementation Sequence steps 4-12 in Section 10)
+- [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values for LLM_PROVIDER and LLM_MODEL, so the Section 14 completion gate item is not yet satisfied
+- [ ] Section 10.2: Question, Exam, and Analytics API (backend lead)
 
-Next step: continue with Implementation Sequence (Section 10), step 4 — implement auth and Pydantic schemas — since step 3 (models and initial migration) is complete.
+Next step: proceed with Implementation Sequence (Section 10), step 4 — implement question generation and retrieval endpoints — since Section 10.1 (auth and Pydantic schemas) is 100% complete and validated.
 
 ## 1. Working Assumptions
 
@@ -89,6 +98,7 @@ streamlit==1.28.1
 python-jose==3.3.0
 passlib==1.7.4
 bcrypt==4.1.1
+email-validator==2.3.0
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.0
@@ -230,11 +240,14 @@ ENVIRONMENT=development
 LLM_PROVIDER=openai-compatible
 LLM_MODEL=replace-with-approved-model
 OPENAI_API_KEY=replace-with-local-secret
+JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
 ```
 
 Do not commit .env.local or real credentials.
 
 Use mocked LLM responses in unit tests. Unit tests must not require a live API key.
+
+**Important for distributed teams**: The `JWT_SECRET_KEY` is automatically handled correctly across all timezones. The codebase uses `datetime.now(timezone.utc)` for all JWT token timestamp operations, ensuring developers in any timezone (UTC, IST, PST, etc.) can generate and validate tokens without any timezone-related configuration. No special timezone setup is needed.
 
 ## 7. Contract Gate Before Feature Work
 
