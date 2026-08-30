@@ -368,6 +368,8 @@ class TopicPerformanceResponse(BaseModel):
 
 ### `POST /api/v1/questions/generate`
 
+Implementation status: until the Section 10.3 RAG and LangGraph workflow is available, this teacher-authorized route returns `501 Not Implemented`. It must be replaced by the workflow below as part of that section; no placeholder questions are persisted.
+
 Generates and validates a question set through the LangGraph MVP flow:
 
 `retrieve_context → generate_questions → validate_questions → save`.
@@ -449,7 +451,7 @@ Validation:
 
 - `chapter_id` and `topic_id` must belong to `subject_id`.
 - `question_types` must be non-empty and contain no duplicates.
-- At least one validated question must be available or successfully generated for every requested slot.
+- At least one validated question must be available for every requested slot until the Section 10.3 generation workflow is available. Before then, an insufficient question bank returns `400 Bad Request`; after the workflow is implemented, the API may generate and validate the missing questions.
 - The requested count must not exceed `50`.
 
 Response: `201 Created` with `ExamResponse`. Questions are ordered by `sequence_no`.
