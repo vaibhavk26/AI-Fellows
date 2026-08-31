@@ -4,13 +4,12 @@
 
 This design defines the PostgreSQL schema for the AI-powered personalized learning and examination system for CBSE Class 10 Physics and Mathematics. PostgreSQL is the authoritative store for identity, curriculum metadata, generated questions, exams, attempts, answers, validation results, and topic performance. FAISS remains a rebuildable retrieval index and is not represented as relational business data.
 
-The MVP persists the complete student exam path: authenticate, browse seeded curriculum, generate and validate MCQ or numerical questions, create an exam, submit an attempt, calculate results, and update topic performance. The schema also includes explicitly separated extension tables for teacher approval, exam assignments, badges, and coach recommendations required by the broader requirements but deferred by the current API and runbook.
+The MVP persists the complete student exam path: authenticate, browse the curriculum discovered from subject PDFs, generate and validate MCQ or numerical questions, create an exam, submit an attempt, calculate results, and update topic performance. The schema also includes explicitly separated extension tables for teacher approval, exam assignments, badges, and coach recommendations required by the broader requirements but deferred by the current API and runbook.
 
 ### Scope decisions
 
 - Class level is fixed to `10` by database and API validation for the MVP.
-- Initial subjects are Physics and Mathematics.
-- Initial chapters are the three Physics and four Mathematics chapters listed in the technical design.
+- Physics and Mathematics are the supported MVP subjects. Their chapters and topics are discovered from the approved subject PDFs during ingestion and persisted in PostgreSQL.
 - Question types implemented by the MVP are `mcq` and `numerical`. `short_answer`, `long_answer`, and `competency` are reserved for later evaluation implementations.
 - Question validation is persisted independently from question status so every validator check and failure reason can be inspected.
 - Submitted attempts are immutable except for operational metadata; repeated submission is idempotent.
@@ -51,7 +50,7 @@ The runbook connection format is `postgresql+psycopg2://...`. Unit tests mock LL
 | User | Login identity, role, and account lifecycle | System |
 | Student profile | Class-level student data | One user |
 | Teacher profile | Teacher-specific data | One user |
-| Subject | Extensible academic subject | System seed |
+| Subject | Extensible academic subject | Curriculum ingestion |
 | Chapter | Subject unit | One subject |
 | Topic | Chapter-level learning area and analytics unit | One chapter |
 | Curriculum document | Curated source document metadata for RAG | System |
@@ -730,30 +729,13 @@ Database connections must use least-privilege application credentials. Backups i
 
 Generated questions that fail validation remain as `rejected` records for diagnosis and are not exam-eligible. Exams and submitted attempts are retained; accounts, curriculum, and questions should be deactivated rather than physically deleted when historical references exist. FAISS files may be rebuilt from active curriculum documents and are not the system of record.
 
-## 17. Seed and Reference Data
+## 17. Curriculum Discovery and Reference Data
 
-Initial seed data is system-controlled and loaded by Alembic or an idempotent seed script. Names are unique and may be extended later.
+Production curriculum structure is derived from one approved, text-readable PDF per supported subject. `scripts/ingest_curriculum.py --all` identifies the subject from the input configuration, extracts document bookmarks, table-of-contents entries, and headings, then persists the discovered `Subject -> Chapter -> Topic` hierarchy. The hierarchy created by ingestion is authoritative for retrieval, generation, exam filtering, and analytics.
 
-### Subjects
+Chapter/topic discovery must be confidence-based. A chunk is stored with its `subject_id` and only receives a `chapter_id` or `topic_id` when document structure supports that classification. Ambiguous content remains subject-level; ingestion must not fabricate a chapter or topic mapping merely to complete a hierarchy. Each topic references its discovered parent chapter. Curriculum documents and source references use stable content hashes so re-ingesting an unchanged PDF does not create duplicate records.
 
-| Name | Class |
-|---|---:|
-| Physics | 10 |
-| Mathematics | 10 |
-
-### Chapters
-
-| Subject | Order | Chapter |
-|---|---:|---|
-| Physics | 1 | Electricity |
-| Physics | 2 | Light |
-| Physics | 3 | Magnetic Effects of Electric Current |
-| Mathematics | 1 | Real Numbers |
-| Mathematics | 2 | Quadratic Equations |
-| Mathematics | 3 | Trigonometry |
-| Mathematics | 4 | Statistics |
-
-Topics are loaded from the curated curriculum ingestion process and are not invented by this schema document. Each topic must reference one seeded chapter. Curriculum documents and source references are loaded by `scripts/ingest_curriculum.py --all` with stable content hashes; no API keys or credentials are seed data.
+`scripts/seed_reference_data.py` may provide temporary example rows for local development and pre-ingestion tests, but those rows are not authoritative and must not be used as a matching vocabulary during production ingestion. No API keys or credentials are reference data.
 
 The extension badge seed values from the proposal (`Chapter Champion`, `5 Tests Completed`, `Physics Pro`, `Maths Master`, `Improvement Streak`) may be inserted only when the post-MVP gamification feature is enabled. They are not required for MVP initialization.
 
@@ -762,9 +744,8 @@ The extension badge seed values from the proposal (`Chapter Champion`, `5 Tests 
 1. Provision PostgreSQL roles and databases `capstone` and `capstone_test` using the runbook; credentials remain local secrets.
 2. Configure SQLAlchemy and Alembic from `DATABASE_URL`.
 3. Initial migration enables `pgcrypto`, creates tables in dependency order: users/profiles, curriculum, documents/references, questions/validation, exams, attempts/answers, performance, then extension tables and indexes.
-4. Run idempotent subject/chapter seed data after tables exist.
-5. Run `alembic upgrade head` against both databases.
-6. Ingest curriculum documents and rebuild FAISS separately; ingestion must be repeatable using `content_hash`.
+4. Run `alembic upgrade head` against both databases.
+5. Ingest curriculum documents and rebuild FAISS separately; ingestion must discover and persist the curriculum hierarchy and be repeatable using `content_hash`.
 7. Future schema changes are new numbered Alembic revisions, reviewed and tested against `capstone_test` before production.
 
 Rollback is performed by an explicitly reviewed Alembic downgrade only before dependent application data is created. For destructive or data-transforming changes, take a backup and use a forward migration with compatibility code rather than relying on downgrade. Never edit an applied migration in place.
@@ -1116,23 +1097,6 @@ CREATE INDEX ix_answers_question ON student_answers (question_id);
 CREATE INDEX ix_performance_student_status_score ON topic_performance (student_id, status, score_percentage, last_updated);
 CREATE INDEX ix_documents_subject_chapter_active ON curriculum_documents (subject_id, chapter_id, is_active);
 
-INSERT INTO subjects (name, class_level)
-VALUES ('Physics', 10), ('Mathematics', 10)
-ON CONFLICT (name, class_level) DO NOTHING;
-
-INSERT INTO chapters (subject_id, name, display_order)
-SELECT s.id, v.name, v.display_order
-FROM subjects s
-JOIN (VALUES
-    ('Physics', 'Electricity', 1),
-    ('Physics', 'Light', 2),
-    ('Physics', 'Magnetic Effects of Electric Current', 3),
-    ('Mathematics', 'Real Numbers', 1),
-    ('Mathematics', 'Quadratic Equations', 2),
-    ('Mathematics', 'Trigonometry', 3),
-    ('Mathematics', 'Statistics', 4)
-) AS v(subject_name, name, display_order) ON v.subject_name = s.name
-ON CONFLICT (subject_id, name) DO NOTHING;
 ```
 
 The application migration should add cross-table hierarchy checks and JSON option-key validation in service code because PostgreSQL `CHECK` constraints cannot query parent tables and the exact JSON schema is more maintainable in Pydantic.
@@ -1163,8 +1127,8 @@ Unresolved source inconsistency: the proposal and requirements describe five que
 - [ ] Enable `pgcrypto` or use an equivalent UUID server default supported by the target PostgreSQL installation.
 - [ ] Implement UTC timestamp handling and an `updated_at` update mechanism.
 - [ ] Implement role/profile consistency and ownership predicates in services.
-- [ ] Seed Physics, Mathematics, and the seven initial chapters idempotently.
-- [ ] Load topics and curriculum documents through the curated ingestion process.
+- [ ] Ingest one approved, text-readable PDF for Physics and one for Mathematics, discovering and persisting the subject/chapter/topic hierarchy idempotently.
+- [ ] Load curriculum documents and source references through the same curated ingestion process.
 - [ ] Implement Pydantic validation for question options, question types, filters, and JSON arrays.
 - [ ] Implement question validation result persistence and status transitions.
 - [ ] Implement exam selection with validated-question eligibility and ordered junction rows.

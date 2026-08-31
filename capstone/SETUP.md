@@ -53,9 +53,9 @@ Remove-Item Env:\DATABASE_URL
 
 Requires `capstone` and `capstone_test` to already exist (see Database setup above) and `.env.local` to be configured with valid `DATABASE_URL`/`TEST_DATABASE_URL` values.
 
-## Seed reference data
+## Temporary sample curriculum data
 
-Run this after migrations, against both `capstone` and `capstone_test`, before curriculum ingestion. It is idempotent and safe to re-run.
+The following script creates sample Subjects and Chapters for local backend development and Section 10.2 tests. It is optional and is not used to classify production curriculum. Section 10.3 ingestion discovers and persists the authoritative curriculum hierarchy from the supplied PDFs.
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.seed_reference_data
@@ -64,17 +64,29 @@ $env:DATABASE_URL = $env:TEST_DATABASE_URL
 Remove-Item Env:\DATABASE_URL
 ```
 
-Verify the seed data landed correctly (repeat with `-d capstone_test` for the test database):
+Verify sample data only when you need it for local backend testing (repeat with `-d capstone_test` for the test database):
 
 ```powershell
 psql -U capstone_user -d capstone -c "SELECT (SELECT count(*) FROM subjects) AS subjects, (SELECT count(*) FROM chapters) AS chapters;"
 ```
 
-Expect `subjects = 2` and `chapters = 7`. Alternatively, verify via SQLAlchemy without `psql`:
+Alternatively, inspect the temporary rows via SQLAlchemy without `psql`:
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from app.db.session import SessionLocal; from app.db.models.curriculum import Subject, Chapter; s = SessionLocal(); [print(sub.name, sub.class_level, [c.name for c in s.query(Chapter).filter_by(subject_id=sub.id).order_by(Chapter.display_order)]) for sub in s.query(Subject).all()]; s.close()"
 ```
+
+## Curriculum PDFs
+
+For Section 10.3, place one text-readable PDF per subject in this directory:
+
+```text
+data/curriculum/
+	physics.pdf
+	mathematics.pdf
+```
+
+Do not split PDFs by chapter or prepare chapter/topic mappings. Ingestion will discover the document hierarchy, persist the resulting Subjects, Chapters, and Topics, then associate source chunks and FAISS vectors with the discovered records. Image-only/scanned PDFs require OCR, which is not part of the current `pypdf` ingestion scope.
 
 ## Run app
 
