@@ -35,7 +35,7 @@ class Question(Base):
     bloom_level = Column(String(20), nullable=True)
     marks = Column(SmallInteger, nullable=False)
     question_text = Column(Text, nullable=False)
-    options = Column(JSONB, nullable=True)
+    options = Column(JSONB(none_as_null=True), nullable=True)
     correct_answer = Column(Text, nullable=False)
     expected_answer = Column(Text, nullable=False)
     explanation = Column(Text, nullable=False)

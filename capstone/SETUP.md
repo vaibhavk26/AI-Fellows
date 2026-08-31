@@ -6,24 +6,28 @@
 cd .\capstone
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and configure the values for the local PostgreSQL and LLM setup.
+Copy `.env.example` to `.env.local` and configure the local PostgreSQL and JWT values. `LLM_PROVIDER`, `LLM_MODEL`, and `OPENAI_API_KEY` may retain their placeholders until the Section 10.3 generation workflow is implemented; the current tests do not call an LLM.
 
 ## Database setup
-'''Start PostgreSQL
-'''Open PowerShell as Administrator:
+
+Start PostgreSQL from an elevated PowerShell window:
+
+```powershell
 Get-Service *postgres*
-
-'''Find the service name, such as postgresql-x64-18, then start it:
 Start-Service postgresql-x64-18
+```
 
-'''Open PostgreSQL’s SQL shell. Enter password set at the time of database creation when prompted to enter password.
+Replace `postgresql-x64-18` with the service name returned by `Get-Service`. Then open PostgreSQL's SQL shell and enter the administrator password when prompted:
+
+```powershell
 psql -U postgres -h localhost
+```
 
 ```sql
 CREATE USER capstone_user WITH PASSWORD 'replace-local-password';
@@ -36,46 +40,58 @@ CREATE DATABASE capstone_test OWNER capstone_user;
 Run this after every `git pull` that changes `alembic/versions/` — each teammate applies migrations to their own local databases; migrations are not shared by pulling code alone.
 
 ```powershell
-alembic upgrade head
+.\.venv\Scripts\alembic.exe upgrade head
 ```
 
 Then apply the same migrations to the test database:
 
 ```powershell
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
-alembic upgrade head
+.\.venv\Scripts\alembic.exe upgrade head
 Remove-Item Env:\DATABASE_URL
 ```
 
 Requires `capstone` and `capstone_test` to already exist (see Database setup above) and `.env.local` to be configured with valid `DATABASE_URL`/`TEST_DATABASE_URL` values.
 
-## Seed reference data
+## Temporary sample curriculum data
 
-Run this after migrations, against both `capstone` and `capstone_test`, before curriculum ingestion. It is idempotent and safe to re-run.
+The following script creates sample Subjects and Chapters for local backend development and Section 10.2 tests. It is optional and is not used to classify production curriculum. Section 10.3 ingestion discovers and persists the authoritative curriculum hierarchy from the supplied PDFs.
 
 ```powershell
-python -m scripts.seed_reference_data
+.\.venv\Scripts\python.exe -m scripts.seed_reference_data
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
-python -m scripts.seed_reference_data
+.\.venv\Scripts\python.exe -m scripts.seed_reference_data
 Remove-Item Env:\DATABASE_URL
 ```
 
-Verify the seed data landed correctly (repeat with `-d capstone_test` for the test database):
+Verify sample data only when you need it for local backend testing (repeat with `-d capstone_test` for the test database):
 
 ```powershell
 psql -U capstone_user -d capstone -c "SELECT (SELECT count(*) FROM subjects) AS subjects, (SELECT count(*) FROM chapters) AS chapters;"
 ```
 
-Expect `subjects = 2` and `chapters = 7`. Alternatively, verify via SQLAlchemy without `psql`:
+Alternatively, inspect the temporary rows via SQLAlchemy without `psql`:
 
 ```powershell
-python -c "from app.db.session import SessionLocal; from app.db.models.curriculum import Subject, Chapter; s = SessionLocal(); [print(sub.name, sub.class_level, [c.name for c in s.query(Chapter).filter_by(subject_id=sub.id).order_by(Chapter.display_order)]) for sub in s.query(Subject).all()]; s.close()"
+.\.venv\Scripts\python.exe -c "from app.db.session import SessionLocal; from app.db.models.curriculum import Subject, Chapter; s = SessionLocal(); [print(sub.name, sub.class_level, [c.name for c in s.query(Chapter).filter_by(subject_id=sub.id).order_by(Chapter.display_order)]) for sub in s.query(Subject).all()]; s.close()"
 ```
+
+## Curriculum PDFs
+
+For Section 10.3, place one text-readable PDF per subject in this directory:
+
+```text
+data/curriculum/
+	physics.pdf
+	mathematics.pdf
+```
+
+Do not split PDFs by chapter or prepare chapter/topic mappings. Ingestion will discover the document hierarchy, persist the resulting Subjects, Chapters, and Topics, then associate source chunks and FAISS vectors with the discovered records. Image-only/scanned PDFs require OCR, which is not part of the current `pypdf` ingestion scope.
 
 ## Run app
 
 ```powershell
-uvicorn app.main:app --reload --port 8000
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
 ## Authentication and Authorization
@@ -136,9 +152,13 @@ JWT_SECRET_KEY=<paste-generated-key-here>
 
 ### Testing
 
-All auth endpoints have 10 integration tests in `tests/integration/test_auth_integration.py`, all passing. To run:
+Run the complete suite using the project interpreter:
 
 ```powershell
-python -m pytest tests/integration/test_auth_integration.py -v
+.\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
+
+The current suite has 15 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; it uses deterministic PostgreSQL fixtures and does not call an LLM or FAISS.
+
+Question retrieval, exams, attempts, scoring, and analytics are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the RAG and LangGraph generation workflow is completed in Section 10.3.
 

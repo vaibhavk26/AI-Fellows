@@ -22,7 +22,7 @@ The design emphasizes a simple, practical MVP that is built using Python and ope
 ### 2.2 In-Scope Features
 
 - Class 10 Physics and Mathematics
-- Initial chapters: Physics (Electricity, Light, Magnetic Effects of Electric Current) and Mathematics (Real Numbers, Quadratic Equations, Trigonometry, Statistics)
+- Chapter and topic structure is discovered from the supplied Physics and Mathematics PDFs during ingestion and persisted as the operational curriculum hierarchy; sample seed rows are development-only and non-authoritative
 - MVP question generation for MCQ and numerical questions
 - Short answer, long answer, competency-based questions, and teacher review are post-MVP extensions
 - Student exam generation and submission

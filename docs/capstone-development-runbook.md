@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-08-29.
+Last updated 2026-08-30.
 
 Completed:
 
@@ -21,7 +21,7 @@ Completed:
 - [x] Project scaffold (Section 4) — 2026-08-25
 - [x] SQLAlchemy models for all MVP and extension tables in [capstone-database-design.md](capstone-database-design.md) section 6/22
 - [x] Alembic initialized (`alembic/env.py`, `alembic/script.py.mako`, `alembic/versions/`) and initial migration `6f0e6720530e_initial_mvp_schema.py` generated and applied to both `capstone` and `capstone_test` (Section 9.1)
-- [x] Seed data for Subjects/Chapters loaded into both `capstone` and `capstone_test` via `scripts/seed_reference_data.py` (Section 9.2) — 2026-08-28
+- [x] Temporary sample Subjects/Chapters loaded into both `capstone` and `capstone_test` via `scripts/seed_reference_data.py` (Section 9.2) — 2026-08-28; these rows are not authoritative for production curriculum ingestion
 - [x] **Section 10.1: Authentication Foundation** — Pydantic schemas, JWT utilities, and auth endpoints fully implemented and tested (10/10 integration tests passing) — 2026-08-29
   - [x] Pydantic schemas for auth request/response validation
   - [x] Password hashing (bcrypt) and JWT utilities in `app/core/security.py`
@@ -32,13 +32,19 @@ Completed:
   - [x] **CRITICAL**: JWT tokens use `datetime.now(timezone.utc)` for timezone-safe token expiration across all developer timezones
   - [x] `/health` returns HTTP 200
 - [x] All dependencies updated: added `email-validator==2.3.0` to requirements.txt and `JWT_SECRET_KEY` to .env.example
+- [x] **Section 10.2 partial: Question retrieval, exams, attempts, scoring, and analytics** — 2026-08-30
+   - [x] Authenticated question retrieval and role-aware visibility
+   - [x] Validated-question exam generation, attempts, idempotent submission, and answer-key-safe responses
+   - [x] Exact-match MCQ scoring, numerical ±5% scoring with unit matching, and transactional topic-performance updates
+   - [x] Progress, weak-topic, attempt-history, and teacher dashboard endpoints
+   - [x] Focused Section 10.2 unit/integration tests; run `./.venv/Scripts/python.exe -m pytest tests/ -v` from `capstone/` (15 passing)
 
 Not yet done:
 
 - [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values for LLM_PROVIDER and LLM_MODEL, so the Section 14 completion gate item is not yet satisfied
-- [ ] Section 10.2: Question, Exam, and Analytics API (backend lead)
+- [ ] Section 10.2 question generation — `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until Section 10.3 steps 7-8 provide the RAG/LangGraph workflow
 
-Next step: proceed with Implementation Sequence (Section 10), step 4 — implement question generation and retrieval endpoints — since Section 10.1 (auth and Pydantic schemas) is 100% complete and validated.
+Next step: proceed with Implementation Sequence (Section 10), steps 7-8 — implement RAG ingestion and the LangGraph generation/validation workflow, then wire it into the existing question-generation endpoint.
 
 ## 1. Working Assumptions
 
@@ -333,13 +339,11 @@ Restore the development DATABASE_URL after the test migration step.
 
 Do not proceed until both databases are migrated successfully.
 
-### 9.2 Seed Data for Subjects/Chapters
+### 9.2 Temporary Sample Curriculum Data
 
-Completed on 2026-08-28: `scripts/seed_reference_data.py` inserts the exact Subjects and Chapters rows from [capstone-database-design.md](capstone-database-design.md) section 17 using the SQLAlchemy session (`app/db/session.py`), and is idempotent (queries for an existing row by its unique key before inserting, so re-running is safe). It intentionally excludes the extension badge seed values, which are post-MVP/gamification-only per section 17.
+Completed on 2026-08-28: `scripts/seed_reference_data.py` provides idempotent sample Subjects and Chapters for local development and the Section 10.2 tests. It is not the source of truth for curriculum structure and must not be used to classify or match production curriculum content.
 
-The exact commands to run it locally, against both `capstone` and `capstone_test`, are in the [capstone/SETUP.md](../capstone/SETUP.md) "Seed reference data" section — run this after migrations and before curriculum ingestion (`scripts/ingest_curriculum.py`), since Chapters foreign-key to Subjects and Topics foreign-key to Chapters. That same section also has the `psql`/SQLAlchemy commands to verify the row counts (2 subjects, 7 chapters) after seeding each database.
-
-Do not proceed to curriculum ingestion until this seed step has been run and verified against both databases.
+Section 10.3 ingestion replaces this role: it accepts one readable PDF per subject, discovers chapter and topic headings from document structure, persists the resulting `Subject -> Chapter -> Topic` hierarchy, and tags every retrieved chunk with those persisted IDs. Re-ingesting the same file must be idempotent through its stable content hash. Use the sample seed only when exercising backend behavior before source PDFs are available.
 
 ## 10. Implementation Sequence
 
@@ -359,10 +363,15 @@ Build in this order. Each step names the primary files to add or modify under `c
 5. **exam creation, submission, results endpoints** — `app/api/endpoints/exams.py` + `app/services/exam_service.py`. Depends on: step 4's retrieval (exam generation selects from `validated` questions only, per [capstone-database-design.md](capstone-database-design.md) section 9).
 6. **weak-topic and performance endpoints** — extend `app/api/endpoints/analytics.py` + `app/services/analytics_service.py`. Depends on: step 5, since `topic_performance` is populated by attempt submission.
 
+Current implementation note: retrieval, exam, attempt, scoring, and analytics routes are implemented and covered by deterministic tests that do not call an LLM. `POST /api/v1/questions/generate` remains a teacher-authorized `501 Not Implemented` stub until steps 7-8 are complete. Do not replace it with synthetic generation data; wire the real workflow when Section 10.3 is implemented.
+
 ### 10.3 RAG and AI Generation Pipeline (AI lead)
 
 7. **RAG ingestion and FAISS retrieval** — implement inside `app/rag/` (currently an empty package). This is the real blocker for step 4's generation endpoint. Required details:
-   - add curriculum PDF groups and subject/chapter/topic metadata (feeds `curriculum_documents`/`source_references` per [capstone-database-design.md](capstone-database-design.md) section 6)
+   - accept one readable subject PDF for Physics and one for Mathematics; do not require chapter- or topic-level source files or manually supplied mappings
+   - discover chapter and topic headings from PDF bookmarks, table of contents, and extracted text; persist the discovered `Subject -> Chapter -> Topic` hierarchy as the operational curriculum source of truth
+   - classify chunks with the discovered subject/chapter/topic IDs and retain subject-level metadata when a chapter or topic cannot be identified confidently; never invent a mapping for uncertain content
+   - persist document/chunk metadata in `curriculum_documents`/`source_references` per [capstone-database-design.md](capstone-database-design.md) section 6
    - extract text using pypdf
    - chunk with roughly 512 tokens and 100-token overlap
    - generate embeddings with sentence-transformers

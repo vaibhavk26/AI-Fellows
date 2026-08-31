@@ -199,7 +199,7 @@ A database connectivity failure returns `503 Service Unavailable` with code `SER
 
 Lists subjects enabled for Class 10. Authentication: bearer token required.
 
-Response: paginated `SubjectResponse` collection. The MVP seed data contains `Physics` and `Mathematics`.
+Response: paginated `SubjectResponse` collection. The MVP supports Physics and Mathematics; the production subject/chapter/topic records are discovered and persisted during curriculum-PDF ingestion.
 
 ### `GET /api/v1/curriculum/subjects/{subject_id}/chapters`
 
@@ -368,6 +368,8 @@ class TopicPerformanceResponse(BaseModel):
 
 ### `POST /api/v1/questions/generate`
 
+Implementation status: until the Section 10.3 RAG and LangGraph workflow is available, this teacher-authorized route returns `501 Not Implemented`. It must be replaced by the workflow below as part of that section; no placeholder questions are persisted.
+
 Generates and validates a question set through the LangGraph MVP flow:
 
 `retrieve_context → generate_questions → validate_questions → save`.
@@ -449,7 +451,7 @@ Validation:
 
 - `chapter_id` and `topic_id` must belong to `subject_id`.
 - `question_types` must be non-empty and contain no duplicates.
-- At least one validated question must be available or successfully generated for every requested slot.
+- At least one validated question must be available for every requested slot until the Section 10.3 generation workflow is available. Before then, an insufficient question bank returns `400 Bad Request`; after the workflow is implemented, the API may generate and validate the missing questions.
 - The requested count must not exceed `50`.
 
 Response: `201 Created` with `ExamResponse`. Questions are ordered by `sequence_no`.
@@ -661,7 +663,7 @@ Each router declares response models and status codes so FastAPI generates an ac
 - [ ] Registration rejects duplicate emails and never returns password data.
 - [ ] Login returns a bearer JWT and invalid credentials return `401`.
 - [ ] Student and teacher route dependencies enforce role and ownership checks.
-- [ ] Curriculum endpoints expose only seeded Class 10 Physics and Mathematics data.
+- [ ] Curriculum endpoints expose the Class 10 Physics and Mathematics hierarchy discovered and persisted from approved subject PDFs.
 - [ ] Question generation uses RAG context and LangGraph generation/validation states.
 - [ ] Failed validation is stored as `rejected`; passing validation is stored as `validated`.
 - [ ] Student exam responses contain no answer keys before submission.

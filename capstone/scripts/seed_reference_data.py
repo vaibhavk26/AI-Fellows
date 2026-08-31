@@ -1,7 +1,8 @@
-"""Idempotent seed script for MVP Subjects/Chapters reference data.
+"""Idempotent sample curriculum data for local development and tests.
 
-Run after migrations, before curriculum ingestion, against both `capstone` and
-`capstone_test` (see docs/capstone-development-runbook.md section 9.2).
+These rows are not authoritative and must not be used to classify production
+curriculum. Section 10.3 ingestion discovers the operational hierarchy from
+the supplied subject PDFs (see docs/capstone-development-runbook.md section 9.2).
 """
 
 from app.db.models.curriculum import Chapter, Subject
