@@ -12,7 +12,7 @@ python -m venv .venv
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and configure the local PostgreSQL and JWT values. `LLM_PROVIDER`, `LLM_MODEL`, and `OPENAI_API_KEY` may retain their placeholders until the Section 10.3 generation workflow is implemented; the current tests do not call an LLM.
+Copy `.env.example` to `.env.local` and configure the local PostgreSQL, JWT, and `VECTOR_DB_PATH` values. Section 10.3 retrieval uses local sentence-transformer embeddings and does not require an LLM credential. `LLM_PROVIDER`, `LLM_MODEL`, and `OPENAI_API_KEY` may retain their placeholders until the Step 8 generation workflow is implemented; the current tests do not call an LLM.
 
 ## Database setup
 
@@ -88,6 +88,20 @@ data/curriculum/
 
 Do not split PDFs by chapter or prepare chapter/topic mappings. Ingestion will discover the document hierarchy, persist the resulting Subjects, Chapters, and Topics, then associate source chunks and FAISS vectors with the discovered records. Image-only/scanned PDFs require OCR, which is not part of the current `pypdf` ingestion scope.
 
+Run the complete ingestion process from `capstone/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all
+```
+
+The first run downloads the local `all-MiniLM-L6-v2` embedding model if it is not already cached. The resulting FAISS index and its `curriculum.metadata.json` metadata sidecar are stored in `VECTOR_DB_PATH`. Re-running the same PDF content is idempotent; a changed file at the same path must be moved to a new path before it can be ingested.
+
+To ingest one PDF explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.ingest_curriculum --pdf .\data\curriculum\physics.pdf --subject Physics
+```
+
 ## Run app
 
 ```powershell
@@ -158,7 +172,7 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite has 15 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; it uses deterministic PostgreSQL fixtures and does not call an LLM or FAISS.
+The current suite has 19 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. All unit tests are deterministic and do not call an LLM, download the embedding model, or require FAISS/LLM services beyond the installed local packages.
 
-Question retrieval, exams, attempts, scoring, and analytics are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the RAG and LangGraph generation workflow is completed in Section 10.3.
+Question retrieval, exams, attempts, scoring, analytics, and curriculum ingestion/retrieval are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the Step 8 LangGraph generation and validation workflow is completed.
 
