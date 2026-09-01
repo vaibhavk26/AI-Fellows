@@ -10,8 +10,19 @@ This folder contains the local scaffold for the capstone MVP.
 4. Ensure PostgreSQL is running and the `capstone` and `capstone_test` databases exist.
 5. Run database migrations: `alembic upgrade head`
 6. Seed reference data: `python -m scripts.seed_reference_data`
-7. Run the FastAPI app: `uvicorn app.main:app --reload`
-8. Verify `/health` endpoint returns HTTP 200
+7. Add readable `data/curriculum/physics.pdf` and `data/curriculum/mathematics.pdf`, then run `python -m scripts.ingest_curriculum --all` to build the local curriculum index.
+8. Run the FastAPI app: `uvicorn app.main:app --reload`
+9. Verify `/health` endpoint returns HTTP 200
+
+## Tests
+
+Run the suite using the project virtual environment so the declared dependencies are selected:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/ -v
+```
+
+The Section 10.2 tests use deterministic PostgreSQL fixtures. RAG unit tests use fixed local embeddings and do not call an LLM or download an embedding model. Curriculum ingestion and FAISS retrieval are available; `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the Step 8 LangGraph workflow is completed.
 
 ## Tests
 
@@ -28,5 +39,5 @@ The Section 10.2 tests use deterministic PostgreSQL fixtures and do not call an 
 - `app/`: FastAPI backend
 - `frontend/`: Streamlit app
 - `tests/`: unit and integration tests
-- `data/curriculum/`: PDF and source curriculum files
-- `scripts/`: ingestion and maintenance utilities
+- `data/curriculum/`: Physics and Mathematics curriculum PDFs
+- `scripts/`: ingestion and maintenance utilities; run `python -m scripts.ingest_curriculum --all` after adding PDFs

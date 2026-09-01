@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-08-30.
+Last updated 2026-09-01.
 
 Completed:
 
@@ -38,13 +38,19 @@ Completed:
    - [x] Exact-match MCQ scoring, numerical ±5% scoring with unit matching, and transactional topic-performance updates
    - [x] Progress, weak-topic, attempt-history, and teacher dashboard endpoints
    - [x] Focused Section 10.2 unit/integration tests; run `./.venv/Scripts/python.exe -m pytest tests/ -v` from `capstone/` (15 passing)
+- [x] **Section 10.3 step 7: RAG ingestion and FAISS retrieval** — 2026-09-01
+   - [x] PDF text extraction with bookmark-aware chapter hints and conservative heading detection
+   - [x] Whitespace-token chunking with a 512-token target and 100-token overlap
+   - [x] Local sentence-transformer embeddings with persisted FAISS index and metadata at `VECTOR_DB_PATH`
+   - [x] Idempotent curriculum document, hierarchy, and source-reference persistence using the PDF content hash
+   - [x] Offline RAG unit tests, including five retrieval queries for each supported subject
 
 Not yet done:
 
 - [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values for LLM_PROVIDER and LLM_MODEL, so the Section 14 completion gate item is not yet satisfied
-- [ ] Section 10.2 question generation — `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until Section 10.3 steps 7-8 provide the RAG/LangGraph workflow
+- [ ] Section 10.3 step 8 / Section 10.2 question generation — `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the LangGraph generation and validation workflow is implemented
 
-Next step: proceed with Implementation Sequence (Section 10), steps 7-8 — implement RAG ingestion and the LangGraph generation/validation workflow, then wire it into the existing question-generation endpoint.
+Next step: proceed with Implementation Sequence (Section 10), step 8 — implement the LangGraph generation/validation workflow, then wire it into the existing question-generation endpoint.
 
 ## 1. Working Assumptions
 
@@ -373,10 +379,22 @@ Current implementation note: retrieval, exam, attempt, scoring, and analytics ro
    - classify chunks with the discovered subject/chapter/topic IDs and retain subject-level metadata when a chapter or topic cannot be identified confidently; never invent a mapping for uncertain content
    - persist document/chunk metadata in `curriculum_documents`/`source_references` per [capstone-database-design.md](capstone-database-design.md) section 6
    - extract text using pypdf
-   - chunk with roughly 512 tokens and 100-token overlap
-   - generate embeddings with sentence-transformers
-   - persist and query a FAISS index (`VECTOR_DB_PATH` from `.env.local`) — ingestion entry point is `scripts/ingest_curriculum.py` (currently a placeholder)
-   - test at least five retrieval queries per subject
+   - chunk with a 512 whitespace-token target and 100-token overlap
+   - generate embeddings locally with the `all-MiniLM-L6-v2` sentence-transformer model
+   - persist and query a FAISS index (`VECTOR_DB_PATH` from `.env.local`); chunk metadata is stored alongside it in `curriculum.metadata.json`
+   - test five deterministic retrieval queries per subject without downloading models, calling an LLM, or requiring a live database
+
+   Run ingestion from `capstone/` after adding readable PDFs:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all
+   ```
+
+   To ingest one PDF instead:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --pdf .\data\curriculum\physics.pdf --subject Physics
+   ```
 8. **LangGraph generation + validation workflow** — implement inside `app/graph/` and `app/agents/` (both currently empty packages). Completes step 4's generation endpoint end to end. Required details:
    - generate MCQ and numerical questions only
    - validate relevance, schema, difficulty, answer data, and duplicate detection
