@@ -373,7 +373,7 @@ Current implementation note: retrieval, exam, attempt, scoring, and analytics ro
 
 ### 10.3 RAG and AI Generation Pipeline (AI lead)
 
-7. **RAG ingestion and FAISS retrieval** — completed in `app/rag/pipeline.py`. This supplies retrieval context for step 8 and does not call an LLM. The ingestion CLI is `scripts/ingest_curriculum.py`. Implemented details:
+7. **RAG ingestion and FAISS retrieval** — implement inside `app/rag/` (currently an empty package). This is the real blocker for step 4's generation endpoint. Required details:
    - accept one readable subject PDF for Physics and one for Mathematics; do not require chapter- or topic-level source files or manually supplied mappings
    - discover chapter and topic headings from PDF bookmarks, table of contents, and extracted text; persist the discovered `Subject -> Chapter -> Topic` hierarchy as the operational curriculum source of truth
    - classify chunks with the discovered subject/chapter/topic IDs and retain subject-level metadata when a chapter or topic cannot be identified confidently; never invent a mapping for uncertain content
