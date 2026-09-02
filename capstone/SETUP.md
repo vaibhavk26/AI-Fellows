@@ -100,7 +100,22 @@ To ingest one PDF explicitly:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --pdf .\data\curriculum\physics.pdf --subject Physics
+
+```powershell
+.\.venv\Scripts\python.exe -c "from app.db.session import SessionLocal; from app.db.models.curriculum import Subject, Chapter; s = SessionLocal(); [print(sub.name, sub.class_level, [c.name for c in s.query(Chapter).filter_by(subject_id=sub.id).order_by(Chapter.display_order)]) for sub in s.query(Subject).all()]; s.close()"
 ```
+
+## Curriculum PDFs
+
+For Section 10.3, place one text-readable PDF per subject in this directory:
+
+```text
+data/curriculum/
+	physics.pdf
+	mathematics.pdf
+```
+
+Do not split PDFs by chapter or prepare chapter/topic mappings. Ingestion will discover the document hierarchy, persist the resulting Subjects, Chapters, and Topics, then associate source chunks and FAISS vectors with the discovered records. Image-only/scanned PDFs require OCR, which is not part of the current `pypdf` ingestion scope.
 
 ## Run app
 
@@ -175,4 +190,7 @@ Run the complete suite using the project interpreter:
 The current suite has 19 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. All unit tests are deterministic and do not call an LLM, download the embedding model, or require FAISS/LLM services beyond the installed local packages.
 
 Question retrieval, exams, attempts, scoring, analytics, and curriculum ingestion/retrieval are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the Step 8 LangGraph generation and validation workflow is completed.
+The current suite has 15 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; it uses deterministic PostgreSQL fixtures and does not call an LLM or FAISS.
+
+Question retrieval, exams, attempts, scoring, and analytics are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the RAG and LangGraph generation workflow is completed in Section 10.3.
 
