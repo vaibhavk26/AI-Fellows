@@ -7,7 +7,7 @@ langchain-openai==0.0.5
 langgraph==0.0.15
 langchain-community==0.0.10
 faiss-cpu==1.7.4
-sentence-transformers==2.2.2
+sentence-transformers==3.4.1
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 alembic==1.13.0
