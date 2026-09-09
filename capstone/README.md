@@ -2,37 +2,20 @@
 
 This folder contains the local scaffold for the capstone MVP.
 
-## Quick start
+## Setup
 
-1. Create a virtual environment.
-2. Install dependencies from `requirements.txt` (includes Python-jose, passlib, bcrypt, and email-validator).
-3. Copy `.env.example` to `.env.local` and set local values (ensure `JWT_SECRET_KEY` is configured).
-4. Ensure PostgreSQL is running and the `capstone` and `capstone_test` databases exist.
-5. Run database migrations: `alembic upgrade head`
-6. Seed reference data: `python -m scripts.seed_reference_data`
-7. Add readable `data/curriculum/physics.pdf` and `data/curriculum/mathematics.pdf`, then run `python -m scripts.ingest_curriculum --all` to build the local curriculum index.
-8. Run the FastAPI app: `uvicorn app.main:app --reload`
-9. Verify `/health` endpoint returns HTTP 200
+Follow [SETUP.md](SETUP.md) for the complete local setup sequence, including the virtual environment, environment variables, PostgreSQL databases, migrations, curriculum ingestion, application startup, and tests.
 
-## Tests
+The short sequence is:
 
-Run the suite using the project virtual environment so the declared dependencies are selected:
+1. Create the virtual environment and install `requirements.txt`.
+2. Configure `.env.local` and PostgreSQL using [SETUP.md](SETUP.md).
+3. Add the Physics and Mathematics PDFs and run `python -m scripts.ingest_curriculum --all`.
+4. Start FastAPI and verify `/health`.
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/ -v
-```
+## Current status
 
-The Section 10.2 tests use deterministic PostgreSQL fixtures. RAG unit tests use fixed local embeddings and do not call an LLM or download an embedding model. Curriculum ingestion and FAISS retrieval are available; `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the Step 8 LangGraph workflow is completed.
-
-## Tests
-
-Run the suite using the project virtual environment so the declared dependencies are selected:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/ -v
-```
-
-The Section 10.2 tests use deterministic PostgreSQL fixtures and do not call an LLM or FAISS. Question retrieval, exams, attempts, scoring, and analytics are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the RAG and LangGraph workflow is completed in Section 10.3.
+The backend includes authentication, question retrieval, exams, attempts, scoring, analytics, curriculum ingestion, and FAISS retrieval. The `POST /api/v1/questions/generate` endpoint remains `501 Not Implemented` until Step 8 adds the LangGraph generation and validation workflow.
 
 ## Project structure
 
