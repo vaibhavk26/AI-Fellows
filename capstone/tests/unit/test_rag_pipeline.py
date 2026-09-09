@@ -12,7 +12,7 @@ class FixedEmbeddingModel:
 
 
 def test_chunk_pages_tracks_detected_hierarchy_and_overlap():
-    pages = ["Chapter 1: Light\n1.1: Reflection\n" + "light " * 8]
+    pages = ["Chapter Light\n1.1 Reflection\n" + "light " * 8]
     chunks = chunk_pages(pages, chunk_size=5, overlap=2)
 
     assert len(chunks) == 2
@@ -25,6 +25,46 @@ def test_chunk_pages_accepts_named_chapter_headings_from_bookmarks():
     chunks = chunk_pages(["Chapter Light\n" + "light " * 5], chunk_size=5, overlap=2)
 
     assert chunks[0].chapter_name == "Light"
+
+
+def test_chunk_pages_supports_three_level_topic_numbering():
+    pages = ["Chapter Electricity\n12.6.2 Resistors in Parallel\n" + "current " * 5]
+    chunks = chunk_pages(pages, chunk_size=5, overlap=2)
+
+    assert chunks[0].chapter_name == "Electricity"
+    assert chunks[0].topic_name == "Resistors in Parallel"
+
+
+def test_chunk_pages_collapses_repeated_heading_artifact():
+    heading = "12.1 ELECTRIC CURRENT" * 5
+    pages = ["Chapter Electricity\n" + heading + "\n" + "current " * 5]
+    chunks = chunk_pages(pages, chunk_size=5, overlap=2)
+
+    assert chunks[0].topic_name == "Electric Current"
+
+
+def test_chunk_pages_ignores_body_sentences_that_start_with_the_word_chapter():
+    pages = ["chapter (see Section 12.7). A fuse prevents damage.\n" + "current " * 5]
+    chunks = chunk_pages(pages, chunk_size=5, overlap=2)
+
+    assert chunks[0].chapter_name is None
+
+
+def test_chunk_pages_ignores_numeric_tables_and_exercise_items():
+    pages = ["10 - 25 2 17.5 35.0\n1. Collect the marks obtained by students.\n" + "data " * 5]
+    chunks = chunk_pages(pages, chunk_size=5, overlap=2)
+
+    assert chunks[0].chapter_name is None
+    assert chunks[0].topic_name is None
+
+
+def test_chunk_pages_requires_all_caps_running_header_to_recur_across_pages():
+    one_off_page = "SOLUTION\n" + "answer " * 5
+    recurring_pages = ["STATISTICS 1\n" + "data " * 5] * 3
+    chunks = chunk_pages([one_off_page, *recurring_pages], chunk_size=5, overlap=2)
+
+    assert all(c.chapter_name is None for c in chunks if c.page_number == 1)
+    assert all(c.chapter_name == "Statistics" for c in chunks if c.page_number != 1)
 
 
 def test_faiss_store_returns_filtered_relevant_chunks(tmp_path: Path):

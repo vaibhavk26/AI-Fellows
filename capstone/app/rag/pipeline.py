@@ -20,9 +20,104 @@ from app.db.models.curriculum import Chapter, CurriculumDocument, SourceReferenc
 
 CHUNK_TOKEN_COUNT = 512
 CHUNK_OVERLAP_TOKENS = 100
-HEADING_PATTERN = re.compile(r"^(?:chapter\s+)?(\d+)\s*[:.-]\s*(.{3,150})$", re.IGNORECASE)
-TOPIC_PATTERN = re.compile(r"^(\d+\.\d+)\s*[:.-]\s*(.{3,150})$", re.IGNORECASE)
-NAMED_CHAPTER_PATTERN = re.compile(r"^chapter\s+(.{3,150})$", re.IGNORECASE)
+# A subsection heading like "13.2 Mean of Grouped Data" or "12.6.2 Resistors in Parallel": number
+# (2 or 3 levels), single space, then a title starting with a capital letter (no digits), which
+# rules out numeric tables/ranges.
+TOPIC_PATTERN = re.compile(r"^(\d{1,2}(?:\.\d{1,2}){1,2})\s+([A-Z][A-Za-z ,'&-]{2,100})$")
+# Some PDFs render a heading by drawing it several times on top of itself (a kerning/bolding
+# artifact), which extraction turns into the same text repeated back-to-back on one line, e.g.
+# "12.1 ELECTRIC CURRENT12.1 ELECTRIC CURRENT12.1 ELECTRIC CURRENT". Collapsing this back to a
+# single occurrence lets it match TOPIC_PATTERN/CHAPTER_HEADER_PATTERN normally.
+_REPEATED_LINE_PATTERN = re.compile(r"^(.{4,150}?)\1{1,9}$")
+# Explicit "Chapter <title>" markers, e.g. injected from PDF bookmarks. The title must look like
+# a title (starts with a capital letter, no digits/periods) to avoid matching body sentences that
+# happen to contain the word "chapter" mid-sentence after line-wrapping.
+NAMED_CHAPTER_PATTERN = re.compile(r"^(?i:chapter)\s+([A-Z][A-Za-z ,'&-]{2,150})$")
+# A chapter title-page marker where extraction glues the title, chapter number, and the word
+# "CHAPTER" onto one line with no separating whitespace, e.g. "Electricity12 CHAPTER". Rare and
+# specific enough to trust on a single occurrence.
+TITLE_PAGE_CHAPTER_PATTERN = re.compile(r"^(.{3,100}?)(\d{1,2})\s*chapter$", re.IGNORECASE)
+# A running-header/footer style chapter title: ALL CAPS words, optionally followed by a page
+# number (e.g. "REAL NUMBERS 1", "STATISTICS 171"). Loose on its own, so it is only trusted once
+# it recurs across several pages (see _detect_chapter_titles) rather than a single occurrence, and
+# generic recurring labels (subject name, "Questions", etc.) are denylisted below.
+CHAPTER_HEADER_PATTERN = re.compile(r"^([A-Z][A-Z '&-]{2,78}[A-Z])(?:\s+\d{1,4})?$")
+MIN_CHAPTER_HEADER_OCCURRENCES = 3
+# Recurring running-header text that is never a chapter title: the subject name itself (printed on
+# alternating pages), and generic section labels (exercises, summaries, notes).
+CHAPTER_HEADER_DENYLIST = {
+    "PHYSICS", "MATHEMATICS", "SCIENCE",
+    "QUESTIONS", "QUESTION", "EXERCISES", "EXERCISE", "SUMMARY", "NOTE", "NOTES", "CONTENTS",
+    "ACTIVITY", "ACTIVITIES",
+}
+# Known chapter titles that PDF text extraction mangles via inconsistent letter-spacing (kerning),
+# keyed by the heading collapsed to its bare uppercase letters for lookup.
+CHAPTER_TITLE_ALIASES = {
+    "REALNUMBERS": "Real Numbers",
+    "QUADRATICEQUATIONS": "Quadratic Equations",
+    "STATISTICS": "Statistics",
+    "TRIGONOMETRY": "Introduction To Trigonometry",
+    "INTRODUCTIONTOTRIGONOMETRY": "Introduction To Trigonometry",
+    "ELECTRICITY": "Electricity",
+    "REFRACTION": "Light",
+    "ELECTRICCURRENT": "Magnetic Effects of Electric Current",
+}
+
+
+def _collapse_letters(text: str) -> str:
+    return re.sub(r"[^A-Z]", "", text.upper())
+
+
+def _collapse_repeated_line(line: str) -> str:
+    match = _REPEATED_LINE_PATTERN.fullmatch(line)
+    return match.group(1) if match else line
+
+
+def _canonical_chapter_title(raw_title: str) -> str:
+    alias = CHAPTER_TITLE_ALIASES.get(_collapse_letters(raw_title))
+    return alias if alias else raw_title.title()
+
+
+def _extract_chapter_candidate(line: str) -> tuple[str, bool] | None:
+    """Return (raw title substring, is_trusted_on_first_sight) if the line looks like a chapter
+    marker, or None. Named/title-page markers are trusted immediately; ALL-CAPS running headers
+    need to recur across pages (checked by the caller) before being trusted."""
+    named_match = NAMED_CHAPTER_PATTERN.fullmatch(line)
+    if named_match:
+        return named_match.group(1).strip(), True
+    title_page_match = TITLE_PAGE_CHAPTER_PATTERN.fullmatch(line)
+    if title_page_match:
+        return title_page_match.group(1).strip(), True
+    header_match = CHAPTER_HEADER_PATTERN.fullmatch(line)
+    if header_match:
+        title = header_match.group(1).strip()
+        if _collapse_letters(title) not in CHAPTER_HEADER_DENYLIST:
+            return title, False
+    return None
+
+
+def _detect_chapter_titles(pages: list[str]) -> dict[str, str]:
+    """Find recurring ALL-CAPS running headers and named chapter markers, keyed by collapsed letters."""
+    occurrences: dict[str, list[str]] = {}
+    trusted: dict[str, str] = {}
+    for page_text in pages:
+        for raw_line in page_text.splitlines():
+            line = _collapse_repeated_line(_normalize(raw_line))
+            if not line:
+                continue
+            candidate = _extract_chapter_candidate(line)
+            if not candidate:
+                continue
+            title, is_trusted = candidate
+            key = _collapse_letters(title)
+            if is_trusted:
+                trusted[key] = _canonical_chapter_title(title)
+            else:
+                occurrences.setdefault(key, []).append(title)
+    for key, seen_titles in occurrences.items():
+        if key not in trusted and len(seen_titles) >= MIN_CHAPTER_HEADER_OCCURRENCES:
+            trusted[key] = _canonical_chapter_title(seen_titles[0])
+    return trusted
 
 
 class EmbeddingModel(Protocol):
@@ -59,6 +154,7 @@ def chunk_pages(pages: list[str], chunk_size: int = CHUNK_TOKEN_COUNT, overlap: 
     if chunk_size <= overlap:
         raise ValueError("chunk_size must be greater than overlap")
 
+    chapter_titles = _detect_chapter_titles(pages)
     chunks: list[ExtractedChunk] = []
     current_chapter: str | None = None
     current_topic: str | None = None
@@ -66,19 +162,17 @@ def chunk_pages(pages: list[str], chunk_size: int = CHUNK_TOKEN_COUNT, overlap: 
         lines = page_text.splitlines()
         body: list[str] = []
         for raw_line in lines:
-            line = _normalize(raw_line)
+            line = _collapse_repeated_line(_normalize(raw_line))
             if not line:
                 continue
             topic_match = TOPIC_PATTERN.fullmatch(line)
-            chapter_match = HEADING_PATTERN.fullmatch(line)
-            named_chapter_match = NAMED_CHAPTER_PATTERN.fullmatch(line)
+            candidate = _extract_chapter_candidate(line)
+            chapter_title = chapter_titles.get(_collapse_letters(candidate[0])) if candidate else None
             if topic_match:
-                current_topic = topic_match.group(2).strip()
-            elif chapter_match:
-                current_chapter = chapter_match.group(2).strip()
-                current_topic = None
-            elif named_chapter_match:
-                current_chapter = named_chapter_match.group(1).strip()
+                title = topic_match.group(2).strip()
+                current_topic = title.title() if title.isupper() else title
+            elif chapter_title:
+                current_chapter = chapter_title
                 current_topic = None
             else:
                 body.append(line)
