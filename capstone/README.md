@@ -15,7 +15,7 @@ The short sequence is:
 
 ## Current status
 
-The backend includes authentication, question retrieval, exams, attempts, scoring, analytics, curriculum ingestion, and FAISS retrieval. The `POST /api/v1/questions/generate` endpoint remains `501 Not Implemented` until Step 8 adds the LangGraph generation and validation workflow.
+The backend includes authentication, question retrieval and generation, exams with generation fallback, attempts, scoring, analytics, curriculum ingestion, and FAISS retrieval. The teacher-only `POST /api/v1/questions/generate` endpoint uses the LangGraph generation and validation workflow.
 
 ## Project structure
 

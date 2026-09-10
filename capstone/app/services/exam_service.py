@@ -9,6 +9,8 @@ from app.db.models.attempt import StudentAnswer, StudentAttempt
 from app.db.models.curriculum import Chapter, Topic
 from app.db.models.exam import Exam, ExamQuestion
 from app.db.models.question import Question
+from app.graph.generation import QuestionGenerationWorkflow, WorkflowError
+from app.api.schemas.question import QuestionGenerationRequest
 from app.services.analytics_service import AnalyticsService
 
 
@@ -25,7 +27,7 @@ class ExamService:
                 raise ValueError("topic_id does not belong to the selected curriculum scope")
 
     @staticmethod
-    def generate_exam(db: Session, request, creator_id: UUID) -> Exam:
+    def generate_exam(db: Session, request, creator_id: UUID, *, generation_model=None, vector_store=None) -> Exam:
         ExamService._validate_scope(db, request.subject_id, request.chapter_id, request.topic_id)
         query = db.query(Question).filter(Question.status == "validated", Question.subject_id == request.subject_id, Question.difficulty == request.difficulty, Question.question_type.in_(request.question_types))
         if request.chapter_id:
@@ -34,7 +36,33 @@ class ExamService:
             query = query.filter(Question.topic_id == request.topic_id)
         questions = query.order_by(Question.created_at).limit(request.question_count).all()
         if len(questions) != request.question_count:
-            raise ValueError("Not enough validated questions match the requested exam criteria")
+            missing = request.question_count - len(questions)
+            existing_by_type = {question.question_type for question in questions}
+            generation_types = [question_type for question_type in request.question_types if question_type in existing_by_type]
+            generation_types.extend(question_type for question_type in request.question_types if question_type not in existing_by_type)
+            try:
+                for index in range(missing):
+                    question_type = generation_types[index % len(generation_types)]
+                    generation_request = QuestionGenerationRequest(
+                        subject_id=request.subject_id, chapter_id=request.chapter_id, topic_id=request.topic_id,
+                        difficulty=request.difficulty, question_type=question_type, marks=1,
+                        number_of_questions=1,
+                    )
+                    result = QuestionGenerationWorkflow(
+                        db, generation_request, creator_id, model=generation_model, store=vector_store, commit=False,
+                    ).run()
+                    generated = [question for question in result["questions"] if question.status == "validated"]
+                    if not generated:
+                        reasons = [reason for validation in result["validation"] for reason in validation["failure_reasons"]]
+                        raise ValueError(f"Generation produced no validated question: {', '.join(reasons)}")
+                    questions.extend(generated)
+            except (WorkflowError, ValueError) as error:
+                db.rollback()
+                raise ValueError(f"Not enough validated questions and generation failed: {error}") from error
+            questions = questions[:request.question_count]
+            if len(questions) != request.question_count:
+                db.rollback()
+                raise ValueError("Not enough validated questions match the requested exam criteria")
         title = request.title or "Practice Exam"
         exam = Exam(title=title, subject_id=request.subject_id, chapter_id=request.chapter_id, topic_id=request.topic_id, difficulty=request.difficulty, question_types=request.question_types, question_count=len(questions), time_limit_minutes=request.time_limit_minutes, created_by=creator_id)
         db.add(exam)

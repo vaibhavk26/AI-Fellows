@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     vector_db_type: str = "faiss"
     vector_db_path: str = str(BASE_DIR / "vectors")
     llm_provider: str = "groq"
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-20b"
     llm_base_url: str = "https://api.groq.com/openai/v1"
     groq_api_key: str | None = None
     jwt_secret_key: str = "your-secret-key-change-in-production"

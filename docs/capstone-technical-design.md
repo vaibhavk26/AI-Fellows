@@ -833,7 +833,7 @@ Use environment variables for:
 Example variables:
 - DATABASE_URL
 - SECRET_KEY
-- OPENAI_API_KEY
+- GROQ_API_KEY
 - VECTOR_DB_PATH
 - APP_ENV
 
