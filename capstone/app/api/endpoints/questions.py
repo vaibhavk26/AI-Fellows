@@ -9,6 +9,7 @@ from app.api.schemas.auth import UserResponse
 from app.api.schemas.question import QuestionGenerationRequest
 from app.db.models.curriculum import SourceReference
 from app.db.models.question import QuestionSourceReference
+from app.graph.generation import QuestionGenerationWorkflow, WorkflowError
 from app.services.question_service import QuestionService
 
 router = APIRouter(prefix="/api/v1/questions", tags=["questions"])
@@ -28,12 +29,29 @@ def _question_data(db: Session, question) -> dict:
 	}
 
 
-@router.post("/generate", status_code=status.HTTP_501_NOT_IMPLEMENTED)
+@router.post("/generate", status_code=status.HTTP_201_CREATED)
 def generate_questions(
 	request: QuestionGenerationRequest,
 	current_user: UserResponse = Depends(get_current_teacher),
+	db: Session = Depends(get_db),
 ) -> dict:
-	raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Question generation requires the Section 10.3 RAG workflow")
+	try:
+		result = QuestionGenerationWorkflow(db, request, current_user.id).run()
+	except WorkflowError as exc:
+		code_to_status = {
+			"INVALID_CURRICULUM_SCOPE": status.HTTP_400_BAD_REQUEST,
+			"VECTOR_STORE_UNAVAILABLE": status.HTTP_503_SERVICE_UNAVAILABLE,
+			"AI_PROVIDER_UNAVAILABLE": status.HTTP_503_SERVICE_UNAVAILABLE,
+			"GENERATION_SAVE_FAILED": status.HTTP_500_INTERNAL_SERVER_ERROR,
+		}
+		raise HTTPException(status_code=code_to_status.get(exc.code, status.HTTP_500_INTERNAL_SERVER_ERROR), detail={"code": exc.code, "message": str(exc)}) from exc
+	return {
+		"data": {
+			"questions": [_question_data(db, question) for question in result["questions"]],
+			"validation": result["validation"],
+		},
+		"meta": result["meta"],
+	}
 
 
 @router.get("")

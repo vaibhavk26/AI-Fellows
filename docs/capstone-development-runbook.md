@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-09-01.
+Last updated 2026-09-10.
 
 Completed:
 
@@ -37,20 +37,25 @@ Completed:
    - [x] Validated-question exam generation, attempts, idempotent submission, and answer-key-safe responses
    - [x] Exact-match MCQ scoring, numerical ±5% scoring with unit matching, and transactional topic-performance updates
    - [x] Progress, weak-topic, attempt-history, and teacher dashboard endpoints
-   - [x] Focused Section 10.2 unit/integration tests; run `./.venv/Scripts/python.exe -m pytest tests/ -v` from `capstone/` (15 passing)
+   - [x] Section 10.2 and generation integration tests; run `./.venv/Scripts/python.exe -m pytest tests/ -v` from `capstone/` (40 passing)
 - [x] **Section 10.3 step 7: RAG ingestion and FAISS retrieval** — 2026-09-01
    - [x] PDF text extraction with bookmark-aware chapter hints and conservative heading detection
    - [x] Whitespace-token chunking with a 512-token target and 100-token overlap
    - [x] Local sentence-transformer embeddings with persisted FAISS index and metadata at `VECTOR_DB_PATH`
    - [x] Idempotent curriculum document, hierarchy, and source-reference persistence using the PDF content hash
    - [x] Offline RAG unit tests, including five retrieval queries for each supported subject
+- [x] **Section 10.3 step 8: LangGraph generation and validation workflow** — 2026-09-10
+   - [x] Groq OpenAI-compatible provider configuration
+   - [x] `retrieve_context -> generate_questions -> validate_questions -> save` workflow
+   - [x] MCQ and numerical generation, deterministic validation, duplicate detection, and source citations
+   - [x] Transactional persistence of validated/rejected questions and validation results
+   - [x] Teacher-only generation endpoint with mocked-provider tests
 
 Not yet done:
 
-- [ ] LLM provider and model selection — `.env.example`/`SETUP.md` still carry placeholder values for LLM_PROVIDER and LLM_MODEL, so the Section 14 completion gate item is not yet satisfied
-- [ ] Section 10.3 step 8 / Section 10.2 question generation — `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the LangGraph generation and validation workflow is implemented
+- [ ] Rotate and configure the Groq credential for each deployment; the provider and model are recorded in `.env.example` and `SETUP.md`
 
-Next step: proceed with Implementation Sequence (Section 10), step 8 — implement the LangGraph generation/validation workflow, then wire it into the existing question-generation endpoint.
+Next step: complete end-to-end manual validation with a rotated Groq key, then proceed to frontend integration and production-readiness checks.
 
 ## 1. Working Assumptions
 
@@ -249,9 +254,10 @@ VECTOR_DB_TYPE=faiss
 VECTOR_DB_PATH=./vectors
 DEBUG=True
 ENVIRONMENT=development
-LLM_PROVIDER=openai-compatible
-LLM_MODEL=replace-with-approved-model
-OPENAI_API_KEY=replace-with-local-secret
+LLM_PROVIDER=groq
+LLM_MODEL=openai/gpt-oss-20b
+LLM_BASE_URL=https://api.groq.com/openai/v1
+GROQ_API_KEY=replace-with-groq-api-key
 JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
 ```
 
@@ -365,11 +371,11 @@ Build in this order. Each step names the primary files to add or modify under `c
 
 4. **question generation and retrieval endpoints** — `app/api/endpoints/questions.py` + `app/services/question_service.py`. Split this step in two:
    - *Retrieval* (`GET /questions`, `GET /questions/{id}`) only needs steps 1-3 and existing rows; build and test this now.
-   - *Generation* (`POST /questions/generate`) is a thin endpoint that delegates to the RAG/LangGraph pipeline built in step 7-8 below — it has no real implementation until those steps exist. Stub it (e.g. return `501 Not Implemented` or a mocked response) if you need to unblock frontend/exam work sooner; do not consider step 4 complete until the real pipeline is wired in.
+   - *Generation* (`POST /questions/generate`) delegates to the RAG/LangGraph pipeline implemented in steps 7-8 below. It is teacher-authorized and persists validated or rejected generated questions with validation results.
 5. **exam creation, submission, results endpoints** — `app/api/endpoints/exams.py` + `app/services/exam_service.py`. Depends on: step 4's retrieval (exam generation selects from `validated` questions only, per [capstone-database-design.md](capstone-database-design.md) section 9).
 6. **weak-topic and performance endpoints** — extend `app/api/endpoints/analytics.py` + `app/services/analytics_service.py`. Depends on: step 5, since `topic_performance` is populated by attempt submission.
 
-Current implementation note: retrieval, exam, attempt, scoring, and analytics routes are implemented and covered by deterministic tests that do not call an LLM. `POST /api/v1/questions/generate` remains a teacher-authorized `501 Not Implemented` stub until steps 7-8 are complete. Do not replace it with synthetic generation data; wire the real workflow when Section 10.3 is implemented.
+Current implementation note: retrieval, generation, exam fallback, attempt, scoring, and analytics routes are implemented and covered by deterministic tests that do not call an LLM. Insufficient validated exam slots invoke the generation workflow transactionally.
 
 ### 10.3 RAG and AI Generation Pipeline (AI lead)
 
@@ -484,7 +490,7 @@ Feature implementation may begin only when all of the following are true:
 - [x] DATABASE_SCHEMA.md is complete ([capstone-database-design.md](capstone-database-design.md))
 - [x] FastAPI /health passes (see Section 0 note: does not yet verify DB connectivity)
 - [x] Alembic migration applies to both databases (Section 9.1, completed 2026-08-27)
-- [ ] LLM provider and model are recorded in SETUP.md — outstanding; `.env.example` still has placeholder values
+- [x] LLM provider and model configuration are recorded in `.env.example` and `SETUP.md`; each developer supplies a current Groq model and private `GROQ_API_KEY`
 - [ ] backend, frontend, AI, and QA ownership are assigned — [TEAM_ROLES.md](../capstone/TEAM_ROLES.md) defines roles but no individuals are assigned yet
 
 ## 15. Documentation Relationship

@@ -12,7 +12,7 @@ python -m venv .venv
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and configure the local PostgreSQL, JWT, and `VECTOR_DB_PATH` values. Section 10.3 retrieval uses local sentence-transformer embeddings and does not require an LLM credential. `LLM_PROVIDER`, `LLM_MODEL`, and `OPENAI_API_KEY` may retain their placeholders until the Step 8 generation workflow is implemented; the current tests do not call an LLM.
+Copy `.env.example` to `.env.local` and configure the local PostgreSQL, JWT, and `VECTOR_DB_PATH` values. Step 8 generation uses Groq through its OpenAI-compatible endpoint. Set `LLM_PROVIDER=groq`, `LLM_MODEL`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, and `GROQ_API_KEY`; never commit `.env.local` or API keys. Tests use a mocked model and do not call Groq.
 
 ## Database setup
 
@@ -94,7 +94,11 @@ Run the complete ingestion process from `capstone/`:
 .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all
 ```
 
-The first run downloads the local `all-MiniLM-L6-v2` embedding model if it is not already cached. The resulting FAISS index and its `curriculum.metadata.json` metadata sidecar are stored in `VECTOR_DB_PATH`. Re-running the same PDF content is idempotent; a changed file at the same path must be moved to a new path before it can be ingested.
+The first run downloads the local `all-MiniLM-L6-v2` embedding model if it is not already cached. The resulting FAISS index and its `curriculum.metadata.json` metadata sidecar are stored in `VECTOR_DB_PATH`. Re-running the same PDF content is idempotent. After chunking or source-PDF changes, use `--rebuild` to replace the PostgreSQL references and rebuild FAISS:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all --rebuild
+```
 
 To ingest one PDF explicitly:
 
@@ -172,7 +176,7 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite has 19 tests. Section 10.2 coverage is in `tests/integration/test_question_exam_analytics_integration.py` and `tests/unit/test_exam_scoring.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. All unit tests are deterministic and do not call an LLM, download the embedding model, or require FAISS/LLM services beyond the installed local packages.
+The current suite has 40 tests. Section 10.2 and step 4 fallback coverage is in `tests/integration/test_question_exam_analytics_integration.py`; generation and answer-shape coverage is in `tests/unit/test_generation_workflow.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. Tests use mocked LLM responses and do not call Groq or require a live API key.
 
-Question retrieval, exams, attempts, scoring, analytics, and curriculum ingestion/retrieval are available. `POST /api/v1/questions/generate` intentionally returns `501 Not Implemented` until the Step 8 LangGraph generation and validation workflow is completed.
+Question retrieval, exams, attempts, scoring, analytics, curriculum ingestion/retrieval, and the teacher-only LangGraph question-generation workflow are available. `POST /api/v1/questions/generate` returns `201` on successful generation, validation, and persistence; provider or vector-store failures return `503` without saving a partial batch.
 
