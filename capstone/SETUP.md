@@ -176,7 +176,15 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite has 40 tests. Section 10.2 and step 4 fallback coverage is in `tests/integration/test_question_exam_analytics_integration.py`; generation and answer-shape coverage is in `tests/unit/test_generation_workflow.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. Tests use mocked LLM responses and do not call Groq or require a live API key.
+The current suite has 51 tests. Section 10.2 and Step 4 fallback coverage is in `tests/integration/test_question_exam_analytics_integration.py`; generation, retry, answer-shape, and deterministic calculation coverage is in `tests/unit/test_generation_workflow.py` and `tests/unit/test_calculation.py`; scoring coverage is in `tests/unit/test_exam_scoring.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. Tests use mocked LLM responses and do not call Groq or require a live API key.
+
+Run the suite with coverage:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests --cov=app --cov-report=term-missing
+```
+
+Numerical generation requires a safe `formula` and `quantities` response. If Groq omits those fields, the service retries once. If the retry is missing, unsafe, or mathematically inconsistent, the question is stored as `rejected`. Calculation details are internal and are not added to the database schema or API response.
 
 Question retrieval, exams, attempts, scoring, analytics, curriculum ingestion/retrieval, and the teacher-only LangGraph question-generation workflow are available. `POST /api/v1/questions/generate` returns `201` on successful generation, validation, and persistence; provider or vector-store failures return `503` without saving a partial batch.
 

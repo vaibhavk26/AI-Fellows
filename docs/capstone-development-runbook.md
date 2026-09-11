@@ -37,7 +37,7 @@ Completed:
    - [x] Validated-question exam generation, attempts, idempotent submission, and answer-key-safe responses
    - [x] Exact-match MCQ scoring, numerical ±5% scoring with unit matching, and transactional topic-performance updates
    - [x] Progress, weak-topic, attempt-history, and teacher dashboard endpoints
-   - [x] Section 10.2 and generation integration tests; run `./.venv/Scripts/python.exe -m pytest tests/ -v` from `capstone/` (40 passing)
+   - [x] Section 10.2, Step 8, and Step 9 integration tests; run `./.venv/Scripts/python.exe -m pytest -q tests --cov=app --cov-report=term-missing` from `capstone/` (51 passing, 91% coverage)
 - [x] **Section 10.3 step 7: RAG ingestion and FAISS retrieval** — 2026-09-01
    - [x] PDF text extraction with bookmark-aware chapter hints and conservative heading detection
    - [x] Whitespace-token chunking with a 512-token target and 100-token overlap
@@ -50,6 +50,13 @@ Completed:
    - [x] MCQ and numerical generation, deterministic validation, duplicate detection, and source citations
    - [x] Transactional persistence of validated/rejected questions and validation results
    - [x] Teacher-only generation endpoint with mocked-provider tests
+   - [x] Structured numerical formula/quantity validation with one corrective retry
+   - [x] Deterministic safe calculation tests without database or API trace fields
+- [x] **Section 10.4 step 9: Scoring and analytics logic** — 2026-09-11
+   - [x] Exact-match MCQ scoring and shared numerical parsing with ±5% tolerance
+   - [x] Missing-answer handling, idempotent submission, and transactional topic performance
+   - [x] Progress, weak-topic, attempt-history, and score-boundary tests
+   - [x] Full suite and coverage validation: 51 tests, 91% coverage
 
 Not yet done:
 
@@ -410,7 +417,7 @@ Current implementation note: retrieval, generation, exam fallback, attempt, scor
 
 ### 10.4 Scoring and Analytics Logic (backend lead)
 
-9. **exam scoring and analytics service logic** — finalize scoring rules (exact-match MCQ, ±5% numerical tolerance) inside `app/services/exam_service.py` and `app/services/analytics_service.py`, per the attempt-submission contract in the API design doc.
+9. **exam scoring and analytics service logic** — completed. Exact-match MCQ scoring, shared numerical parsing with ±5% tolerance, missing-answer handling, transactional topic performance, progress, weak-topic, and attempt-history endpoints are implemented and tested.
 
 ### 10.5 Frontend (frontend lead)
 

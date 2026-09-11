@@ -26,6 +26,8 @@ class GeneratedQuestionPayload(BaseModel):
     learning_objective: str = ""
     difficulty: str = ""
     question_type: str = ""
+    formula: str | None = None
+    quantities: dict[str, str] | None = None
 
 
 def build_generation_prompt(request: QuestionGenerationRequest, context: str) -> str:
@@ -42,8 +44,37 @@ not a keyed JSON object. Every option text must be non-empty. `correct_answer` a
 the same option key (for example, "A"), never a numeric answer or option text.
 The numeric or textual answer belongs in the selected option's `text` field.
 For numerical: options must be null, and `correct_answer` and `expected_answer`
-must both contain the same numeric answer, optionally followed by a unit.
+must both contain the same numeric answer, optionally followed by a unit. Also
+return `formula` and a `quantities` object containing every variable and its value
+with unit, for example `formula: "Q = I * t"`, `quantities: {{"I": "0.6 A", "t": "4 min"}}`.
 Do not include markdown or extra text.
+
+CURRICULUM CONTEXT:
+{context}
+"""
+
+
+def build_numerical_retry_prompt(
+    request: QuestionGenerationRequest,
+    context: str,
+    previous_questions: list[dict],
+) -> str:
+    return f"""Your previous numerical-question response was incomplete because it omitted the required
+`formula` and `quantities` fields. Repair the same response and return exactly {request.number_of_questions}
+question(s) as a JSON object with a `questions` array and no markdown.
+
+For every question, include:
+- `question_type`: `numerical`
+- `options`: null
+- `correct_answer` and `expected_answer`: the same numeric answer with optional unit
+- `formula`: a safe arithmetic formula using only named variables
+- `quantities`: an object mapping every formula variable to its numeric value and unit
+
+The formula and quantities must independently calculate the provided answer. Do not invent missing
+values; use only the curriculum context.
+
+PREVIOUS RESPONSE:
+{json.dumps(previous_questions)}
 
 CURRICULUM CONTEXT:
 {context}

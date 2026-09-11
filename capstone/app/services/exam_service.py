@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from uuid import UUID
@@ -12,6 +11,7 @@ from app.db.models.question import Question
 from app.graph.generation import QuestionGenerationWorkflow, WorkflowError
 from app.api.schemas.question import QuestionGenerationRequest
 from app.services.analytics_service import AnalyticsService
+from app.services.numerical import parse_numeric_answer
 
 
 class ExamService:
@@ -102,18 +102,13 @@ class ExamService:
             return False
         if question.question_type == "mcq":
             return submitted_answer.strip().casefold() == question.correct_answer.strip().casefold()
-        expected_match = re.search(r"([-+]?\d+(?:\.\d+)?)(?:\s*([a-zA-Z]+))?", question.correct_answer)
-        answer_match = re.search(r"([-+]?\d+(?:\.\d+)?)(?:\s*([a-zA-Z]+))?", submitted_answer)
-        if not expected_match or not answer_match:
+        expected_value = parse_numeric_answer(question.correct_answer)
+        submitted_value = parse_numeric_answer(submitted_answer)
+        if not expected_value or not submitted_value:
             return False
-        expected_unit = expected_match.group(2)
-        answer_unit = answer_match.group(2)
-        if expected_unit and expected_unit.casefold() != (answer_unit or "").casefold():
-            return False
-        try:
-            expected = Decimal(expected_match.group(1))
-            submitted = Decimal(answer_match.group(1))
-        except InvalidOperation:
+        expected, expected_unit = expected_value
+        submitted, answer_unit = submitted_value
+        if expected_unit != answer_unit:
             return False
         tolerance = abs(expected) * Decimal("0.05")
         return abs(submitted - expected) <= tolerance if expected else submitted == 0

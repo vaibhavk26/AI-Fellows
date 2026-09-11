@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, TypedDict
 from uuid import UUID, uuid4
@@ -11,12 +12,20 @@ from uuid import UUID, uuid4
 from langgraph.graph import END, StateGraph
 from sqlalchemy.orm import Session
 
-from app.agents.generation import ChatModel, build_generation_prompt, create_chat_model, parse_generation_response
+from app.agents.generation import (
+    ChatModel,
+    build_generation_prompt,
+    build_numerical_retry_prompt,
+    create_chat_model,
+    parse_generation_response,
+)
 from app.api.schemas.question import QuestionGenerationRequest
 from app.core.config import get_settings
 from app.db.models.curriculum import Chapter, Subject, Topic
 from app.db.models.question import Question, QuestionSourceReference, QuestionValidationResult
 from app.rag.pipeline import FaissStore, RetrievalResult
+from app.services.numerical import parse_numeric_answer
+from app.services.calculation import calculate_formula
 
 
 class WorkflowError(RuntimeError):
@@ -34,6 +43,8 @@ class GeneratedQuestion(TypedDict, total=False):
     learning_objective: str
     difficulty: str
     question_type: str
+    formula: str | None
+    quantities: dict[str, str] | None
 
 
 class ValidationSummary(TypedDict):
@@ -68,16 +79,6 @@ class QuestionGenerationWorkflow:
     commit: bool = True
 
     @staticmethod
-    def _numeric_answer(value: str) -> bool:
-        number = r"(?:[-+]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][-+]?\d+)?|[-+]?\d+\s*/\s*\d+)"
-        unit = r"(?:\s*(?:%|[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)?(?:\^[-+]?\d+)?))?"
-        return bool(re.fullmatch(number + unit, value.strip()))
-
-    @staticmethod
-    def _canonical_numeric(value: str) -> str:
-        return " ".join(value.strip().casefold().split())
-
-    @staticmethod
     def _normalize_options(options: object) -> list[dict[str, str]] | None:
         if isinstance(options, dict):
             return [{"key": key, "text": str(options[key])} for key in ("A", "B", "C", "D") if key in options]
@@ -105,9 +106,11 @@ class QuestionGenerationWorkflow:
             normalized["expected_answer"] = str(item.get("expected_answer", "")).strip().upper()
         else:
             normalized["question_type"] = str(item.get("question_type", "")).strip().casefold()
-            normalized["correct_answer"] = cls._canonical_numeric(str(item.get("correct_answer", "")))
-            normalized["expected_answer"] = cls._canonical_numeric(str(item.get("expected_answer", "")))
+            normalized["correct_answer"] = " ".join(str(item.get("correct_answer", "")).strip().casefold().split())
+            normalized["expected_answer"] = " ".join(str(item.get("expected_answer", "")).strip().casefold().split())
             normalized["options"] = None
+            normalized["formula"] = item.get("formula")
+            normalized["quantities"] = item.get("quantities")
         return normalized
 
     def run(self) -> dict[str, Any]:
@@ -168,7 +171,15 @@ class QuestionGenerationWorkflow:
         context = "\n\n".join(item.text for item in state["context"])
         try:
             response = model.invoke(build_generation_prompt(state["request"], context))
-            generated = [self._normalize_generated_item(item) for item in parse_generation_response(response)]
+            generated = parse_generation_response(response)
+            if state["request"].question_type == "numerical" and any(
+                not item.get("formula") or not item.get("quantities") for item in generated
+            ):
+                retry_response = model.invoke(
+                    build_numerical_retry_prompt(state["request"], context, generated)
+                )
+                generated = parse_generation_response(retry_response)
+            generated = [self._normalize_generated_item(item) for item in generated]
         except Exception as exc:
             raise WorkflowError("AI_PROVIDER_UNAVAILABLE", "The Groq generation request failed") from exc
         if len(generated) != state["request"].number_of_questions:
@@ -210,7 +221,9 @@ class QuestionGenerationWorkflow:
             expected_answer = str(item.get("expected_answer", "")).strip()
             answer_correctness = bool(correct_answer and expected_answer)
             if request.question_type == "numerical":
-                answer_correctness = answer_correctness and self._canonical_numeric(correct_answer) == self._canonical_numeric(expected_answer)
+                correct_value = parse_numeric_answer(correct_answer)
+                expected_value = parse_numeric_answer(expected_answer)
+                answer_correctness = bool(correct_value and expected_value and correct_value == expected_value)
             type_match = question_type == request.question_type
             difficulty_match = difficulty == request.difficulty
             if not question_text:
@@ -233,9 +246,19 @@ class QuestionGenerationWorkflow:
             else:
                 if options is not None:
                     failures.append("numerical questions cannot have options")
-                if not self._numeric_answer(correct_answer) or not self._numeric_answer(expected_answer):
+                if not parse_numeric_answer(correct_answer) or not parse_numeric_answer(expected_answer):
                     answer_correctness = False
                     failures.append("numerical answers must contain a number and optional unit")
+                formula = item.get("formula")
+                quantities = item.get("quantities")
+                calculated = calculate_formula(formula, quantities) if isinstance(formula, str) and isinstance(quantities, dict) else None
+                expected_numeric = parse_numeric_answer(expected_answer)
+                if calculated is None or expected_numeric is None:
+                    answer_correctness = False
+                    failures.append("numerical answer requires a safe formula and quantities")
+                elif abs(calculated - expected_numeric[0]) > max(abs(expected_numeric[0]) * Decimal("0.0001"), Decimal("0.000001")):
+                    answer_correctness = False
+                    failures.append("calculated result does not match expected answer")
             if not answer_correctness:
                 failures.append("answer data is incomplete")
             duplicate_key = " ".join(question_text.casefold().split())
