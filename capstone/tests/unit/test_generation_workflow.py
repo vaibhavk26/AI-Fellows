@@ -14,6 +14,16 @@ class FakeModel:
         return type("Response", (), {"content": json.dumps({"questions": self.questions})})()
 
 
+class RetryModel:
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.calls = 0
+
+    def invoke(self, prompt):
+        self.calls += 1
+        return type("Response", (), {"content": json.dumps({"questions": next(self.responses)})})()
+
+
 def test_parse_generation_response_accepts_json_fences():
     response = type("Response", (), {"content": "```json\n{\"questions\": []}\n```"})()
 
@@ -86,6 +96,7 @@ def test_workflow_accepts_numerical_answer_without_options():
             "question_text": "Calculate the mean.", "options": None, "correct_answer": "59.3",
             "expected_answer": "59.3", "explanation": "Use the mean formula.",
             "learning_objective": "Calculate a mean.", "difficulty": "easy", "question_type": "numerical",
+            "formula": "total / count", "quantities": {"total": "1186", "count": "20"},
         }],
     })
 
@@ -147,6 +158,7 @@ def test_workflow_accepts_broad_numerical_formats():
             "correct_answer": "2.5e1 %", "expected_answer": "2.5e1 %",
             "explanation": "Convert the ratio to a percentage.", "learning_objective": "Calculate percentage.",
             "difficulty": "easy", "question_type": "numerical",
+            "formula": "value", "quantities": {"value": "25"},
         }],
     })
 
@@ -170,3 +182,73 @@ def test_workflow_normalizes_lowercase_and_unordered_mcq_keys():
     })
 
     assert result["validations"][0]["status"] == "validated"
+
+
+def test_workflow_rejects_numerical_question_without_structured_calculation():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    result = workflow.validate_questions({
+        "request": request, "context": [], "generated": [{
+            "question_text": "Calculate the charge.", "options": None,
+            "correct_answer": "144 C", "expected_answer": "144 C",
+            "explanation": "Use Q = I * t.", "learning_objective": "Calculate charge.",
+            "difficulty": "easy", "question_type": "numerical",
+        }],
+    })
+
+    assert result["validations"][0]["status"] == "rejected"
+    assert "numerical answer requires a safe formula and quantities" in result["validations"][0]["failure_reasons"]
+
+
+def test_workflow_rejects_numerical_answer_that_disagrees_with_formula():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    result = workflow.validate_questions({
+        "request": request, "context": [], "generated": [{
+            "question_text": "Calculate the charge.", "options": None,
+            "correct_answer": "150 C", "expected_answer": "150 C",
+            "explanation": "Use Q = I * t.", "learning_objective": "Calculate charge.",
+            "difficulty": "easy", "question_type": "numerical", "formula": "Q = I * t",
+            "quantities": {"I": "0.6 A", "t": "4 min"},
+        }],
+    })
+
+    assert result["validations"][0]["status"] == "rejected"
+    assert "calculated result does not match expected answer" in result["validations"][0]["failure_reasons"]
+
+
+def test_workflow_retries_numerical_response_missing_calculation_fields():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    workflow.model = RetryModel([
+        [{
+            "question_text": "Calculate charge.", "options": None, "correct_answer": "30 C",
+            "expected_answer": "30 C", "difficulty": "easy", "question_type": "numerical",
+        }],
+        [{
+            "question_text": "Calculate charge.", "options": None, "correct_answer": "30 C",
+            "expected_answer": "30 C", "difficulty": "easy", "question_type": "numerical",
+            "formula": "Q = I * t", "quantities": {"I": "2 A", "t": "15 s"},
+        }],
+    ])
+
+    result = workflow.generate_questions({
+        "request": request,
+        "context": [],
+    })
+
+    assert workflow.model.calls == 2
+    assert result["generated"][0]["formula"] == "Q = I * t"
+    assert result["generated"][0]["quantities"] == {"I": "2 A", "t": "15 s"}

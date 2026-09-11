@@ -392,6 +392,8 @@ Response: `201 Created`.
 
 Only validated questions may be selected for exams. Failed validation is persisted with `status: rejected`, its reasons, and the workflow run ID for diagnosis. The endpoint returns `503` with `AI_PROVIDER_UNAVAILABLE` if generation cannot complete; it does not save a partially generated exam.
 
+For numerical questions, the provider must return a safe arithmetic `formula` and a `quantities` object containing the formula variables and values. The application evaluates the formula with a restricted deterministic calculator and compares the result with the generated answer. If either field is missing, the workflow makes one corrective provider retry. Questions that remain incomplete, unsafe, or mathematically inconsistent are persisted as `rejected`. Formula and quantity details remain internal and are not exposed in the API response or added as database columns.
+
 ### `GET /api/v1/questions`
 
 Lists questions visible to the caller.
@@ -668,7 +670,7 @@ Each router declares response models and status codes so FastAPI generates an ac
 - [ ] Failed validation is stored as `rejected`; passing validation is stored as `validated`.
 - [ ] Student exam responses contain no answer keys before submission.
 - [ ] MCQ scoring uses exact matching.
-- [ ] Numerical scoring uses ±5% tolerance.
+- [x] Numerical scoring uses ±5% tolerance.
 - [ ] Missing answers receive zero and do not cause a partial result.
 - [ ] Repeated attempt submission is idempotent.
 - [ ] Submission updates topic performance exactly once.
