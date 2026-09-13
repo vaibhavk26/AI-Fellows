@@ -15,6 +15,8 @@ The MVP supports:
 
 The following are designed as post-MVP extensions and are not required by the initial runbook: teacher approval checkpoints, exam assignment, AI grading for written answers, learning-coach recommendations, badges, and advanced class analytics.
 
+This document describes both the implemented MVP contract and planned post-MVP routes. The implemented MVP question types are `mcq` and `numerical`; teacher approval, written-answer evaluation, assignments, and coaching routes remain deferred.
+
 ## 2. API Conventions
 
 ### 2.1 Base URLs and versioning
@@ -418,7 +420,7 @@ Authentication: bearer token required. Students may access only validated questi
 
 Responses: `200`, `404 QUESTION_NOT_FOUND`, or `403 FORBIDDEN`.
 
-### `GET /api/v1/questions/{question_id}/validation`
+### Planned post-MVP: `GET /api/v1/questions/{question_id}/validation`
 
 Returns validator checks and failure reasons.
 
@@ -426,7 +428,7 @@ Authentication: teacher role required.
 
 Response: `200 OK` with `ValidationSummary`.
 
-### `POST /api/v1/questions/{question_id}/revalidate`
+### Planned post-MVP: `POST /api/v1/questions/{question_id}/revalidate`
 
 Re-runs the validator against the stored question and current curriculum index.
 

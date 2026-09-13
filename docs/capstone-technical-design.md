@@ -6,6 +6,8 @@ This capstone project implements an AI-powered personalized learning and examina
 
 The design emphasizes a simple, practical MVP that is built using Python and open-source tools. It uses a modular layered architecture so the project remains easy to implement, test, and extend while supporting future growth in curriculum coverage and AI capabilities.
 
+For the current implementation, the MVP boundary is MCQ and numerical questions, deterministic validation, student scoring/analytics, and teacher generation/review. Teacher approval, learning-coach routing, assignments, badges, and written-answer evaluation remain planned extensions.
+
 ---
 
 ## 2. Goals and Scope

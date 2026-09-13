@@ -6,6 +6,8 @@ This capstone project delivers an AI-powered personalized learning and examinati
 
 The system is intentionally structured so that the core flow remains easy to build and demonstrate within a short capstone timeline, while still being extensible for future enhancements such as additional subjects, chapters, advanced AI coaching, or broader school-level deployment.
 
+The current MVP boundary is narrower than the broader architecture diagram: the implemented flow supports MCQ and numerical generation, validation, student exams, scoring, analytics, and teacher generation/review. Teacher approval, coaching, assignments, badges, and written-answer evaluation are extension points, not active local workflows.
+
 ---
 
 ## 2. Architectural Goals
