@@ -1,6 +1,7 @@
 import json
 from uuid import uuid4
 
+from app.agents import generation
 from app.agents.generation import parse_generation_response
 from app.api.schemas.question import QuestionGenerationRequest
 from app.graph.generation import QuestionGenerationWorkflow
@@ -30,6 +31,18 @@ def test_parse_generation_response_accepts_json_fences():
     assert parse_generation_response(response) == []
 
 
+def test_generation_prompt_can_exclude_questions_already_in_exam_batch():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+
+    prompt = generation.build_generation_prompt(request, "Electricity and current", ["What is current?"])
+
+    assert "Do not repeat any of these existing questions" in prompt
+    assert "What is current?" in prompt
+
+
 def test_workflow_validates_mcq_and_rejects_duplicate():
     request = QuestionGenerationRequest(
         subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
@@ -55,6 +68,31 @@ def test_workflow_validates_mcq_and_rejects_duplicate():
     assert result["validations"][0]["status"] == "validated"
     assert result["validations"][1]["status"] == "rejected"
     assert "duplicate question" in result["validations"][1]["failure_reasons"]
+
+
+def test_workflow_validates_multiple_distinct_mcqs_in_one_batch():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=3,
+    )
+    questions = [
+        {
+            "question_text": f"What is current concept {index}?",
+            "options": [
+                {"key": "A", "text": "Charge flow"}, {"key": "B", "text": "Mass"},
+                {"key": "C", "text": "Heat"}, {"key": "D", "text": "Light"},
+            ],
+            "correct_answer": "A", "expected_answer": "A", "explanation": "Current is charge flow.",
+            "learning_objective": "Define current.", "difficulty": "easy", "question_type": "mcq",
+        }
+        for index in range(3)
+    ]
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+
+    result = workflow.validate_questions({"request": request, "context": [], "generated": questions})
+
+    assert [item["status"] for item in result["validations"]] == ["validated", "validated", "validated"]
 
 
 def test_workflow_rejects_mcq_with_numeric_expected_answer():

@@ -30,7 +30,14 @@ class GeneratedQuestionPayload(BaseModel):
     quantities: dict[str, str] | None = None
 
 
-def build_generation_prompt(request: QuestionGenerationRequest, context: str) -> str:
+def build_generation_prompt(
+    request: QuestionGenerationRequest,
+    context: str,
+    avoid_questions: list[str] | None = None,
+) -> str:
+    avoid_section = ""
+    if avoid_questions:
+        avoid_section = "\nDo not repeat any of these existing questions:\n- " + "\n- ".join(avoid_questions)
     return f"""Generate exactly {request.number_of_questions} Grade 10 {request.question_type} question(s).
 Difficulty: {request.difficulty}
 Marks: {request.marks}
@@ -48,6 +55,7 @@ must both contain the same numeric answer, optionally followed by a unit. Also
 return `formula` and a `quantities` object containing every variable and its value
 with unit, for example `formula: "Q = I * t"`, `quantities: {{"I": "0.6 A", "t": "4 min"}}`.
 Do not include markdown or extra text.
+{avoid_section}
 
 CURRICULUM CONTEXT:
 {context}
@@ -93,6 +101,8 @@ def create_chat_model() -> ChatModel:
         temperature=0,
         openai_api_key=settings.groq_api_key,
         openai_api_base=settings.llm_base_url,
+        request_timeout=settings.llm_timeout_seconds,
+        max_retries=0,
     )
 
 

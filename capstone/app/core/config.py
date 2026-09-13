@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"
     llm_model: str = "openai/gpt-oss-20b"
     llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_timeout_seconds: float = 45.0
     groq_api_key: str | None = None
     jwt_secret_key: str = "your-secret-key-change-in-production"
 

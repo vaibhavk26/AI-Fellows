@@ -77,6 +77,7 @@ class QuestionGenerationWorkflow:
     model: ChatModel | None = None
     store: FaissStore | None = None
     commit: bool = True
+    avoid_question_texts: list[str] | None = None
 
     @staticmethod
     def _normalize_options(options: object) -> list[dict[str, str]] | None:
@@ -170,7 +171,7 @@ class QuestionGenerationWorkflow:
         model = self.model or create_chat_model()
         context = "\n\n".join(item.text for item in state["context"])
         try:
-            response = model.invoke(build_generation_prompt(state["request"], context))
+            response = model.invoke(build_generation_prompt(state["request"], context, self.avoid_question_texts))
             generated = parse_generation_response(response)
             if state["request"].question_type == "numerical" and any(
                 not item.get("formula") or not item.get("quantities") for item in generated

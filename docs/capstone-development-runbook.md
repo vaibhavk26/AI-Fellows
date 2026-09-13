@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-09-10.
+Last updated 2026-09-13.
 
 Completed:
 
@@ -37,7 +37,7 @@ Completed:
    - [x] Validated-question exam generation, attempts, idempotent submission, and answer-key-safe responses
    - [x] Exact-match MCQ scoring, numerical ±5% scoring with unit matching, and transactional topic-performance updates
    - [x] Progress, weak-topic, attempt-history, and teacher dashboard endpoints
-   - [x] Section 10.2, Step 8, and Step 9 integration tests; run `./.venv/Scripts/python.exe -m pytest -q tests --cov=app --cov-report=term-missing` from `capstone/` (51 passing, 91% coverage)
+   - [x] Section 10.2, Step 8, and Step 9 integration tests; run `./.venv/Scripts/python.exe -m pytest -q tests --cov=app --cov-report=term-missing` from `capstone/` (backend and browser coverage are maintained in the current suite)
 - [x] **Section 10.3 step 7: RAG ingestion and FAISS retrieval** — 2026-09-01
    - [x] PDF text extraction with bookmark-aware chapter hints and conservative heading detection
    - [x] Whitespace-token chunking with a 512-token target and 100-token overlap
@@ -56,13 +56,18 @@ Completed:
    - [x] Exact-match MCQ scoring and shared numerical parsing with ±5% tolerance
    - [x] Missing-answer handling, idempotent submission, and transactional topic performance
    - [x] Progress, weak-topic, attempt-history, and score-boundary tests
-   - [x] Full suite and coverage validation: 51 tests, 91% coverage
+   - [x] Full backend and frontend validation: 66 tests passing, including 9 Playwright browser tests
+- [x] **Section 10.5: Streamlit frontend** — 2026-09-13
+   - [x] Registration, login, session state, and sign-out
+   - [x] Student dashboard, curriculum selection, multi-question MCQ/numerical exams, submission, and results
+   - [x] Teacher question bank and generation controls
+   - [x] Playwright coverage for authentication, role restrictions, dashboard/results states, empty-bank handling, teacher controls, and exam submission
 
 Not yet done:
 
 - [ ] Rotate and configure the Groq credential for each deployment; the provider and model are recorded in `.env.example` and `SETUP.md`
 
-Next step: complete end-to-end manual validation with a rotated Groq key, then proceed to frontend integration and production-readiness checks.
+Next step: keep deployment credentials out of source control, then complete production deployment and readiness checks.
 
 ## 1. Working Assumptions
 
@@ -124,10 +129,13 @@ passlib==1.7.4
 bcrypt==4.1.1
 email-validator==2.3.0
 pytest==7.4.3
+pytest-cov==4.1.0
 pytest-asyncio==0.21.1
 httpx==0.25.0
 python-dotenv==1.0.0
 requests==2.31.0
+playwright==1.45.0
+pytest-playwright==0.5.1
 ```
 
 ## 2.2 Git and Branch Hygiene
@@ -264,6 +272,7 @@ ENVIRONMENT=development
 LLM_PROVIDER=groq
 LLM_MODEL=openai/gpt-oss-20b
 LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_TIMEOUT_SECONDS=45
 GROQ_API_KEY=replace-with-groq-api-key
 JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
 ```
@@ -421,7 +430,7 @@ Current implementation note: retrieval, generation, exam fallback, attempt, scor
 
 ### 10.5 Frontend (frontend lead)
 
-10. **Streamlit pages and frontend flow** — `frontend/pages/1_Dashboard.py` through `5_Generate.py` and `frontend/components/sidebar.py` (all currently scaffolded but empty). Depends on steps 1-9 for the endpoints each page calls (a page can be stubbed against mocked data earlier, but the end-to-end flow below requires the real backend):
+10. **Streamlit pages and frontend flow** — implemented in `frontend/streamlit_app.py`, `frontend/pages/1_Dashboard.py` through `5_Generate.py`, and `frontend/components/`. Depends on steps 1-9 for the endpoints each page calls:
     - `1_Dashboard.py` -> weak-topic / progress summary (step 6)
     - `2_Exam.py` -> attempt an exam (step 5)
     - `3_Results.py` -> attempt results and explanations (step 9)
@@ -432,7 +441,7 @@ Current implementation note: retrieval, generation, exam fallback, attempt, scor
 
 ### 10.6 Tests and Production Readiness (QA lead / DevOps lead)
 
-11. **unit and integration tests** — `tests/unit/`, `tests/integration/` (health tests already exist as a template: `tests/unit/test_health.py`, `tests/integration/test_health_integration.py`). See Section 11 (Test and Quality Gates) below.
+11. **unit, integration, and browser tests** — `tests/unit/`, `tests/integration/`, and `tests/e2e/`. See Section 11 (Test and Quality Gates) below.
 12. **production readiness checks** — see Section 12 (Deployment Gate) below.
 
 ## 11. Test and Quality Gates
@@ -443,6 +452,15 @@ Run:
 pytest tests/unit/ -v
 pytest tests/integration/ -v
 pytest tests/ --cov=app --cov-report=term-missing
+```
+
+For browser validation, start FastAPI and Streamlit, configure a teacher account that owns a populated validated question bank, install Chromium once, and run:
+
+```powershell
+.\.venv\Scripts\python.exe -m playwright install chromium
+$env:E2E_TEACHER_EMAIL = "teacher@example.com"
+$env:E2E_TEACHER_PASSWORD = "replace-with-password"
+.\.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -q
 ```
 
 Required quality checks:
@@ -497,7 +515,7 @@ Feature implementation may begin only when all of the following are true:
 - [x] DATABASE_SCHEMA.md is complete ([capstone-database-design.md](capstone-database-design.md))
 - [x] FastAPI /health passes (see Section 0 note: does not yet verify DB connectivity)
 - [x] Alembic migration applies to both databases (Section 9.1, completed 2026-08-27)
-- [x] LLM provider and model configuration are recorded in `.env.example` and `SETUP.md`; each developer supplies a current Groq model and private `GROQ_API_KEY`
+- [x] LLM provider, model, timeout, and credential configuration are recorded in `.env.example` and `SETUP.md`; each developer supplies a current Groq model and private `GROQ_API_KEY`
 - [ ] backend, frontend, AI, and QA ownership are assigned — [TEAM_ROLES.md](../capstone/TEAM_ROLES.md) defines roles but no individuals are assigned yet
 
 ## 15. Documentation Relationship

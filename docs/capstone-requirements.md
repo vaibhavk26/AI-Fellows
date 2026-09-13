@@ -1,5 +1,7 @@
 # Capstone Requirements Document
 
+> **MVP boundary:** This requirements document captures the broader product vision. The implemented local MVP, defined by the implementation plan, API design, and runbook, supports MCQ and numerical questions, automatic scoring, validation, student analytics, and teacher generation/review. Short-answer, long-answer, competency questions, teacher approval, assignments, badges, and learning-coach recommendations are deferred extensions.
+
 ## 1. Introduction
 
 This capstone project is an AI-powered personalized learning and examination system for CBSE Class 10 Physics and Mathematics students. The solution supports automated question generation, curriculum-grounded validation, student exam-taking, performance analysis, and targeted practice for weak learning areas. The system is designed to help students practice effectively, support teachers in question preparation and review, and demonstrate the value of Generative AI, RAG, and agentic workflows in a real educational context.

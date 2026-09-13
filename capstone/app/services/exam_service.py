@@ -50,6 +50,7 @@ class ExamService:
                     )
                     result = QuestionGenerationWorkflow(
                         db, generation_request, creator_id, model=generation_model, store=vector_store, commit=False,
+                        avoid_question_texts=[question.question_text for question in questions],
                     ).run()
                     generated = [question for question in result["questions"] if question.status == "validated"]
                     if not generated:

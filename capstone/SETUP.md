@@ -1,5 +1,7 @@
 # Setup Guide
 
+This is the canonical local setup path for Windows PowerShell. Run commands from the `capstone/` directory unless noted otherwise.
+
 ## Local environment
 
 ```powershell
@@ -10,20 +12,29 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
+Activation is optional. If PowerShell blocks `Activate.ps1`, use the explicit `\.venv\Scripts\python.exe` path shown in every command.
+
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and configure the local PostgreSQL, JWT, and `VECTOR_DB_PATH` values. Step 8 generation uses Groq through its OpenAI-compatible endpoint. Set `LLM_PROVIDER=groq`, `LLM_MODEL`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, and `GROQ_API_KEY`; never commit `.env.local` or API keys. Tests use a mocked model and do not call Groq.
+Copy `.env.example` to `.env.local` and edit the local PostgreSQL, JWT, vector-store, and Groq values:
+
+```powershell
+Copy-Item .env.example .env.local
+notepad .env.local
+```
+
+Step 8 generation uses Groq through its OpenAI-compatible endpoint. Set `LLM_PROVIDER=groq`, `LLM_MODEL`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_TIMEOUT_SECONDS=45`, and `GROQ_API_KEY`; never commit `.env.local` or API keys. Tests use mocked models and do not call Groq. If the PostgreSQL password contains URL characters such as `@`, `:`, `/`, or `#`, URL-encode it in both connection strings.
 
 ## Database setup
 
-Start PostgreSQL from an elevated PowerShell window:
+Start PostgreSQL from an elevated PowerShell window. The service name varies by installed PostgreSQL version:
 
 ```powershell
 Get-Service *postgres*
-Start-Service postgresql-x64-18
+Get-Service postgresql* | Where-Object Status -eq 'Stopped' | Start-Service
 ```
 
-Replace `postgresql-x64-18` with the service name returned by `Get-Service`. Then open PostgreSQL's SQL shell and enter the administrator password when prompted:
+Then open PostgreSQL's SQL shell and enter the administrator password when prompted:
 
 ```powershell
 psql -U postgres -h localhost
@@ -34,6 +45,8 @@ CREATE USER capstone_user WITH PASSWORD 'replace-local-password';
 CREATE DATABASE capstone OWNER capstone_user;
 CREATE DATABASE capstone_test OWNER capstone_user;
 ```
+
+If the user or databases already exist, skip the `CREATE` statements and continue with migrations.
 
 ## Database migrations
 
@@ -50,6 +63,8 @@ $env:DATABASE_URL = $env:TEST_DATABASE_URL
 .\.venv\Scripts\alembic.exe upgrade head
 Remove-Item Env:\DATABASE_URL
 ```
+
+The temporary `DATABASE_URL` override makes Alembic target `capstone_test`; removing it restores the development database setting.
 
 Requires `capstone` and `capstone_test` to already exist (see Database setup above) and `.env.local` to be configured with valid `DATABASE_URL`/`TEST_DATABASE_URL` values.
 
@@ -108,9 +123,25 @@ To ingest one PDF explicitly:
 
 ## Run app
 
+Start FastAPI in one terminal:
+
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
+
+Verify it from a second terminal:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8000/health -Method Get
+```
+
+Expected output is `status: ok`. Start Streamlit in a third terminal:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run frontend/streamlit_app.py --server.port 8501
+```
+
+Open the app at http://localhost:8501, API docs at http://localhost:8000/docs, and ReDoc at http://localhost:8000/redoc.
 
 ## Authentication and Authorization
 
@@ -176,13 +207,31 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite has 51 tests. Section 10.2 and Step 4 fallback coverage is in `tests/integration/test_question_exam_analytics_integration.py`; generation, retry, answer-shape, and deterministic calculation coverage is in `tests/unit/test_generation_workflow.py` and `tests/unit/test_calculation.py`; scoring coverage is in `tests/unit/test_exam_scoring.py`; RAG coverage is in `tests/unit/test_rag_pipeline.py`. Tests use mocked LLM responses and do not call Groq or require a live API key.
+The current suite has 66 tests, including 9 Playwright browser tests. Backend coverage is in `tests/unit/` and `tests/integration/`; browser coverage is in `tests/e2e/test_frontend_browser.py`. Backend tests use mocked LLM responses and do not call Groq or require a live API key.
 
 Run the suite with coverage:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q tests --cov=app --cov-report=term-missing
 ```
+
+## Frontend browser tests
+
+The Playwright suite exercises authentication, role restrictions, dashboard/results states, teacher question-bank and generation controls, empty-bank handling, MCQ submission, numerical submission, and a three-question student exam flow. Install the browser binary once:
+
+```powershell
+.\.venv\Scripts\python.exe -m playwright install chromium
+```
+
+Start FastAPI and Streamlit in separate terminals, then provide a teacher account that owns the populated validated question bank and run:
+
+```powershell
+$env:E2E_TEACHER_EMAIL = "teacher@example.com"
+$env:E2E_TEACHER_PASSWORD = "replace-with-password"
+.\.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -q
+```
+
+The browser tests create temporary users. Populated-bank tests use the configured teacher account and require at least three validated easy MCQs in one chapter. Override `E2E_API_URL` or `E2E_FRONTEND_URL` when services use non-default ports.
 
 Numerical generation requires a safe `formula` and `quantities` response. If Groq omits those fields, the service retries once. If the retry is missing, unsafe, or mathematically inconsistent, the question is stored as `rejected`. Calculation details are internal and are not added to the database schema or API response.
 
