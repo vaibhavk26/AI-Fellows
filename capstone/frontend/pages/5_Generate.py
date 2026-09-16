@@ -24,7 +24,7 @@ if require_auth("teacher"):
 				question_type = st.selectbox("Question type", ["mcq", "numerical"])
 				difficulty = st.selectbox("Difficulty", ["easy", "medium", "hard"])
 				marks = st.number_input("Marks", min_value=1, max_value=10, value=1)
-				number = st.slider("Questions", 1, 20, 5)
+				number = st.slider("Questions", 1, 10, 5)
 				bloom = st.selectbox("Learning level", ["remember", "understand", "apply", "analyze"])
 				submitted = st.form_submit_button("Generate", type="primary", use_container_width=True)
 			if submitted:
@@ -35,4 +35,10 @@ if require_auth("teacher"):
 					st.write(question["question_text"])
 					st.caption(f"{question['status']} · {question['difficulty']} · {question['marks']} mark(s)")
 	except ApiError as error:
-		st.error(error.message)
+		if error.status_code == 429:
+			st.warning(
+				"The question generator is busy right now (AI provider rate limit). "
+				"Please wait about a minute and click Generate again, or try fewer questions at a time."
+			)
+		else:
+			st.error(error.message)

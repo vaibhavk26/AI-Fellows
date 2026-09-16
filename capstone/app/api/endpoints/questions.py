@@ -42,6 +42,7 @@ def generate_questions(
 			"INVALID_CURRICULUM_SCOPE": status.HTTP_400_BAD_REQUEST,
 			"VECTOR_STORE_UNAVAILABLE": status.HTTP_503_SERVICE_UNAVAILABLE,
 			"AI_PROVIDER_UNAVAILABLE": status.HTTP_503_SERVICE_UNAVAILABLE,
+			"AI_PROVIDER_RATE_LIMITED": status.HTTP_429_TOO_MANY_REQUESTS,
 			"GENERATION_SAVE_FAILED": status.HTTP_500_INTERNAL_SERVER_ERROR,
 		}
 		raise HTTPException(status_code=code_to_status.get(exc.code, status.HTTP_500_INTERNAL_SERVER_ERROR), detail={"code": exc.code, "message": str(exc)}) from exc
