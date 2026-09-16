@@ -58,5 +58,5 @@ class QuestionGenerationRequest(BaseModel):
     difficulty: Literal["easy", "medium", "hard"]
     question_type: Literal["mcq", "numerical"]
     marks: PositiveInt
-    number_of_questions: int = Field(ge=1, le=50)
+    number_of_questions: int = Field(ge=1, le=10)
     bloom_level: Literal["remember", "understand", "apply", "analyze"] | None = None

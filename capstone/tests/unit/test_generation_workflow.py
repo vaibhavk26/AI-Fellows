@@ -1,10 +1,15 @@
 import json
+from types import SimpleNamespace
 from uuid import uuid4
+
+import httpx
+import pytest
+from openai import RateLimitError
 
 from app.agents import generation
 from app.agents.generation import parse_generation_response
 from app.api.schemas.question import QuestionGenerationRequest
-from app.graph.generation import QuestionGenerationWorkflow
+from app.graph.generation import QuestionGenerationWorkflow, WorkflowError
 
 
 class FakeModel:
@@ -23,6 +28,25 @@ class RetryModel:
     def invoke(self, prompt):
         self.calls += 1
         return type("Response", (), {"content": json.dumps({"questions": next(self.responses)})})()
+
+
+def _rate_limit_error() -> RateLimitError:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(429, request=request)
+    return RateLimitError("Rate limit reached, try again in 2.5s", response=response, body=None)
+
+
+class RateLimitModel:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def invoke(self, prompt):
+        self.calls += 1
+        item = self.responses.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return type("Response", (), {"content": json.dumps({"questions": item})})()
 
 
 def test_parse_generation_response_accepts_json_fences():
@@ -290,3 +314,133 @@ def test_workflow_retries_numerical_response_missing_calculation_fields():
     assert workflow.model.calls == 2
     assert result["generated"][0]["formula"] == "Q = I * t"
     assert result["generated"][0]["quantities"] == {"I": "2 A", "t": "15 s"}
+
+
+def test_workflow_retries_numerical_response_with_unsupported_formula_or_answer_format():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    workflow.model = RetryModel([
+        [{
+            "question_text": "Find the angle.", "options": None, "correct_answer": "19.5°",
+            "expected_answer": "19.5°", "difficulty": "easy", "question_type": "numerical",
+            "formula": "arcsin(value)", "quantities": {"value": "0.3333"},
+        }],
+        [{
+            "question_text": "Calculate charge.", "options": None, "correct_answer": "30 C",
+            "expected_answer": "30 C", "difficulty": "easy", "question_type": "numerical",
+            "formula": "I * t", "quantities": {"I": "2 A", "t": "15 s"},
+        }],
+    ])
+
+    result = workflow.generate_questions({"request": request, "context": []})
+
+    assert workflow.model.calls == 2
+    assert result["generated"][0]["correct_answer"] == "30 c"
+
+
+def test_numerical_prompt_excludes_unsupported_calculations_and_symbols():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+
+    prompt = generation.build_generation_prompt(request, "Electricity and current")
+
+    assert "Do not use trigonometric" in prompt
+    assert "never symbols such as `×`, `^`, or `°`" in prompt
+
+
+def test_workflow_retries_questions_not_grounded_in_curriculum_context():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    workflow.model = RetryModel([
+        [{
+            "question_text": "What is photosynthesis?", "options": [
+                {"key": "A", "text": "A plant process"}, {"key": "B", "text": "A force"},
+                {"key": "C", "text": "A circuit"}, {"key": "D", "text": "A sound"},
+            ], "correct_answer": "A", "expected_answer": "A", "explanation": "Plants make food.",
+            "learning_objective": "Define photosynthesis.", "difficulty": "easy", "question_type": "mcq",
+        }],
+        [{
+            "question_text": "What does electric current measure?", "options": [
+                {"key": "A", "text": "The flow of electric charge"}, {"key": "B", "text": "The mass of a wire"},
+                {"key": "C", "text": "The colour of a circuit"}, {"key": "D", "text": "The temperature of light"},
+            ], "correct_answer": "A", "expected_answer": "A", "explanation": "Electric current is the flow of charge.",
+            "learning_objective": "Define electric current and charge.", "difficulty": "easy", "question_type": "mcq",
+        }],
+    ])
+    context = [SimpleNamespace(text="Electric current is the flow of electric charge through a circuit.")]
+
+    result = workflow.generate_questions({"request": request, "context": context})
+
+    assert workflow.model.calls == 2
+    assert result["generated"][0]["question_text"] == "What does electric current measure?"
+    assert "at least two meaningful terms" in generation.build_grounding_retry_prompt(request, "electric current", [])
+
+
+def test_generate_questions_retries_once_on_rate_limit_then_succeeds(monkeypatch):
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    workflow.model = RateLimitModel([
+        _rate_limit_error(),
+        [{
+            "question_text": "What is current?", "options": [
+                {"key": "A", "text": "Charge flow"}, {"key": "B", "text": "Mass"},
+                {"key": "C", "text": "Heat"}, {"key": "D", "text": "Light"},
+            ], "correct_answer": "A", "expected_answer": "A", "explanation": "Current is charge flow.",
+            "learning_objective": "Define current.", "difficulty": "easy", "question_type": "mcq",
+        }],
+    ])
+    monkeypatch.setattr("app.graph.generation.time.sleep", lambda seconds: None)
+
+    result = workflow.generate_questions({"request": request, "context": []})
+
+    assert workflow.model.calls == 2
+    assert result["generated"][0]["question_text"] == "What is current?"
+
+
+def test_generate_questions_raises_rate_limited_error_after_persistent_rate_limit(monkeypatch):
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+    workflow = QuestionGenerationWorkflow.__new__(QuestionGenerationWorkflow)
+    workflow.request = request
+    workflow.model = RateLimitModel([_rate_limit_error(), _rate_limit_error(), _rate_limit_error()])
+    monkeypatch.setattr("app.graph.generation.time.sleep", lambda seconds: None)
+
+    with pytest.raises(WorkflowError) as excinfo:
+        workflow.generate_questions({"request": request, "context": []})
+
+    assert excinfo.value.code == "AI_PROVIDER_RATE_LIMITED"
+    assert workflow.model.calls == 3
+
+
+def test_estimate_max_tokens_scales_with_question_type_and_caps_at_setting(monkeypatch):
+    monkeypatch.setattr("app.graph.generation.get_settings", lambda: SimpleNamespace(llm_max_tokens=8192))
+    mcq_request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=5,
+    )
+    numerical_request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=10,
+    )
+
+    mcq_tokens = QuestionGenerationWorkflow._estimate_max_tokens(mcq_request)
+    numerical_tokens = QuestionGenerationWorkflow._estimate_max_tokens(numerical_request)
+
+    assert mcq_tokens < numerical_tokens
+    assert numerical_tokens <= 8192

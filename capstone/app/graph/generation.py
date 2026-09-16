@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, TypedDict
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
+from openai import RateLimitError
 from sqlalchemy.orm import Session
 
 from app.agents.generation import (
     ChatModel,
     build_generation_prompt,
+    build_grounding_retry_prompt,
     build_numerical_retry_prompt,
     create_chat_model,
     parse_generation_response,
@@ -168,24 +171,105 @@ class QuestionGenerationWorkflow:
         return {**state, "context": context}
 
     def generate_questions(self, state: WorkflowState) -> WorkflowState:
-        model = self.model or create_chat_model()
+        model = self.model or create_chat_model(max_tokens=self._estimate_max_tokens(state["request"]))
         context = "\n\n".join(item.text for item in state["context"])
         try:
-            response = model.invoke(build_generation_prompt(state["request"], context, self.avoid_question_texts))
+            response = self._invoke_with_rate_limit_retry(
+                model, build_generation_prompt(state["request"], context, self.avoid_question_texts)
+            )
             generated = parse_generation_response(response)
+            generated = [self._normalize_generated_item(item) for item in generated]
             if state["request"].question_type == "numerical" and any(
-                not item.get("formula") or not item.get("quantities") for item in generated
+                not self._has_valid_numerical_calculation(item) for item in generated
             ):
-                retry_response = model.invoke(
-                    build_numerical_retry_prompt(state["request"], context, generated)
+                retry_response = self._invoke_with_rate_limit_retry(
+                    model, build_numerical_retry_prompt(state["request"], context, generated)
                 )
                 generated = parse_generation_response(retry_response)
             generated = [self._normalize_generated_item(item) for item in generated]
+            if any(not self._is_curriculum_relevant(item, state.get("context", [])) for item in generated):
+                retry_response = self._invoke_with_rate_limit_retry(
+                    model, build_grounding_retry_prompt(state["request"], context, generated)
+                )
+                generated = [
+                    self._normalize_generated_item(item)
+                    for item in parse_generation_response(retry_response)
+                ]
+        except RateLimitError as exc:
+            raise WorkflowError(
+                "AI_PROVIDER_RATE_LIMITED",
+                "The Groq provider rate limit is still exceeded after retrying. Please wait about a "
+                "minute, then try again with fewer questions.",
+            ) from exc
         except Exception as exc:
             raise WorkflowError("AI_PROVIDER_UNAVAILABLE", "The Groq generation request failed") from exc
         if len(generated) != state["request"].number_of_questions:
             raise WorkflowError("AI_PROVIDER_UNAVAILABLE", "The provider returned an unexpected question count")
         return {**state, "generated": generated}
+
+    @staticmethod
+    def _estimate_max_tokens(request: QuestionGenerationRequest) -> int:
+        settings = get_settings()
+        per_question = 700 if request.question_type == "numerical" else 300
+        estimated = 300 + per_question * request.number_of_questions
+        return max(512, min(settings.llm_max_tokens, estimated))
+
+    @staticmethod
+    def _invoke_with_rate_limit_retry(model: ChatModel, prompt: str, *, max_attempts: int = 3) -> object:
+        last_error: RateLimitError | None = None
+        for attempt in range(max_attempts):
+            try:
+                return model.invoke(prompt)
+            except RateLimitError as exc:
+                last_error = exc
+                if attempt < max_attempts - 1:
+                    time.sleep(QuestionGenerationWorkflow._rate_limit_wait_seconds(exc))
+        raise last_error
+
+    @staticmethod
+    def _rate_limit_wait_seconds(exc: RateLimitError) -> float:
+        header_value = getattr(getattr(exc, "response", None), "headers", {}).get("retry-after")
+        if header_value is None:
+            match = re.search(r"try again in ([\d.]+)", str(exc))
+            header_value = match.group(1) if match else None
+        return min(float(header_value), 15.0) if header_value else 5.0
+
+    @staticmethod
+    def _has_valid_numerical_calculation(item: GeneratedQuestion) -> bool:
+        correct_answer = parse_numeric_answer(str(item.get("correct_answer", "")).strip())
+        expected_answer = parse_numeric_answer(str(item.get("expected_answer", "")).strip())
+        formula = item.get("formula")
+        quantities = item.get("quantities")
+        if not correct_answer or not expected_answer or correct_answer != expected_answer:
+            return False
+        if not isinstance(formula, str) or not isinstance(quantities, dict):
+            return False
+        calculated = calculate_formula(formula, quantities)
+        expected_value = expected_answer[0]
+        return calculated is not None and abs(calculated - expected_value) <= max(
+            abs(expected_value) * Decimal("0.0001"), Decimal("0.000001")
+        )
+
+    @staticmethod
+    def _is_curriculum_relevant(item: GeneratedQuestion, context: list[RetrievalResult]) -> bool:
+        stop_words = {
+            "what", "which", "following", "calculate", "class", "students", "question",
+            "answer", "using", "find", "the", "and", "from", "with", "does", "are",
+        }
+        context_terms = {
+            term.casefold()
+            for result in context
+            for term in re.findall(r"[A-Za-z][A-Za-z0-9]+", result.text)
+            if len(term) > 3 and term.casefold() not in stop_words
+        }
+        evidence_text = " ".join([
+            str(item.get("question_text", "")),
+            " ".join(str(option.get("text", "")) for option in item.get("options") or [] if isinstance(option, dict)),
+            str(item.get("explanation", "")),
+            str(item.get("learning_objective", "")),
+        ])
+        evidence_terms = set(re.findall(r"[A-Za-z][A-Za-z0-9]+", evidence_text.casefold())) - stop_words
+        return not context_terms or len(context_terms.intersection(evidence_terms)) >= 2
 
     def validate_questions(self, state: WorkflowState) -> WorkflowState:
         request = state["request"]
@@ -200,16 +284,6 @@ class QuestionGenerationWorkflow:
                 Question.difficulty == request.difficulty,
             ).all()
         } if getattr(self, "database", None) is not None else set()
-        stop_words = {
-            "what", "which", "following", "calculate", "class", "students", "question",
-            "answer", "using", "find", "the", "and", "from", "with", "does", "are",
-        }
-        context_terms = {
-            term.casefold()
-            for result in state.get("context", [])
-            for term in re.findall(r"[A-Za-z][A-Za-z0-9]+", result.text)
-            if len(term) > 3 and term.casefold() not in stop_words
-        }
         validations: list[ValidationSummary] = []
         for item in state["generated"]:
             item = self._normalize_generated_item(item)
@@ -270,14 +344,7 @@ class QuestionGenerationWorkflow:
             learning_objective_alignment = bool(str(item.get("learning_objective", "")).strip())
             if not learning_objective_alignment:
                 failures.append("learning_objective is required")
-            evidence_text = " ".join([
-                question_text,
-                " ".join(str(option.get("text", "")) for option in options or []),
-                str(item.get("explanation", "")),
-                str(item.get("learning_objective", "")),
-            ])
-            evidence_terms = set(re.findall(r"[A-Za-z][A-Za-z0-9]+", evidence_text.casefold())) - stop_words
-            curriculum_relevance = not context_terms or len(context_terms.intersection(evidence_terms)) >= 2
+            curriculum_relevance = self._is_curriculum_relevant(item, state.get("context", []))
             if not curriculum_relevance:
                 failures.append("question is not grounded in retrieved curriculum context")
             validations.append({
