@@ -31,6 +31,17 @@ _UNIT_FACTORS = {
     "hour": Decimal("3600"),
     "hours": Decimal("3600"),
 }
+# Well-known physics/math constants the model may reference by name instead of
+# hand-writing imprecise digits (a common source of formula/answer mismatches).
+_CONSTANTS = {
+    "pi": Decimal("3.14159265358979"),
+    "mu0": Decimal("1.25663706212E-6"),
+    "e0": Decimal("8.8541878128E-12"),
+    "epsilon0": Decimal("8.8541878128E-12"),
+    "c": Decimal("2.99792458E8"),
+    "g": Decimal("9.8"),
+    "k": Decimal("8.99E9"),
+}
 
 
 def _evaluate(node: ast.AST, values: dict[str, Decimal]) -> Decimal:
@@ -40,6 +51,8 @@ def _evaluate(node: ast.AST, values: dict[str, Decimal]) -> Decimal:
         return Decimal(str(node.value))
     if isinstance(node, ast.Name) and node.id in values:
         return values[node.id]
+    if isinstance(node, ast.Name) and node.id in _CONSTANTS:
+        return _CONSTANTS[node.id]
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
         value = _evaluate(node.operand, values)
         return value if isinstance(node.op, ast.UAdd) else -value

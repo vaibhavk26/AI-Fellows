@@ -6,8 +6,10 @@ import re
 from decimal import Decimal, InvalidOperation
 
 _NUMBER = r"[-+]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][-+]?\d+)?|[-+]?\d+\s*/\s*\d+"
+_UNIT_FACTOR = r"[A-Za-z\u03a9][A-Za-z0-9]*(?:\^[-+]?\d+)?"
+_UNIT = rf"{_UNIT_FACTOR}(?:[\u00b7*]{_UNIT_FACTOR})*(?:/{_UNIT_FACTOR})?"
 _NUMERIC_ANSWER = re.compile(
-    rf"^(?P<number>{_NUMBER})(?:\s*(?P<unit>%|[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)?(?:\^[-+]?\d+)?))?$"
+    rf"^(?P<number>{_NUMBER})(?:\s*(?P<unit>%|{_UNIT}))?$"
 )
 
 
