@@ -55,6 +55,55 @@ def test_parse_generation_response_accepts_json_fences():
     assert parse_generation_response(response) == []
 
 
+def test_parse_generation_response_repairs_stray_quoted_brace_between_array_items():
+    # Reproduces an observed gpt-oss quirk, confirmed against live output: the real opening
+    # brace of the next item gets wrapped in stray quotes, e.g. `}},"{","question_text":...`.
+    malformed = (
+        '{"questions":[{"question_text":"A","question_type":"numerical","options":null,'
+        '"correct_answer":"1 T","expected_answer":"1 T","explanation":"e","learning_objective":"l",'
+        '"difficulty":"easy","formula":"I","quantities":{"I":"1 A"}},"{",'
+        '"question_text":"B","question_type":"numerical","options":null,'
+        '"correct_answer":"2 T","expected_answer":"2 T","explanation":"e","learning_objective":"l",'
+        '"difficulty":"easy","formula":"I","quantities":{"I":"2 A"}}]}'
+    )
+    response = type("Response", (), {"content": malformed})()
+
+    result = parse_generation_response(response)
+
+    assert [item["question_text"] for item in result] == ["A", "B"]
+
+
+def test_parse_generation_response_recovers_objects_via_brace_scan_fallback():
+    # A corruption shape the targeted quote repair does not cover: a bare missing comma
+    # between two otherwise well-formed objects. The brace-depth scanner fallback should
+    # still recover both items independently.
+    malformed = (
+        '{"questions":[{"question_text":"A","question_type":"numerical","options":null,'
+        '"correct_answer":"1 T","expected_answer":"1 T","explanation":"e","learning_objective":"l",'
+        '"difficulty":"easy","formula":"I","quantities":{"I":"1 A"}}'
+        '{"question_text":"B","question_type":"numerical","options":null,'
+        '"correct_answer":"2 T","expected_answer":"2 T","explanation":"e","learning_objective":"l",'
+        '"difficulty":"easy","formula":"I","quantities":{"I":"2 A"}}]}'
+    )
+    response = type("Response", (), {"content": malformed})()
+
+    result = parse_generation_response(response)
+
+    assert [item["question_text"] for item in result] == ["A", "B"]
+
+
+def test_parse_generation_response_normalizes_nested_value_unit_quantities():
+    response = type("Response", (), {"content": json.dumps({"questions": [{
+        "question_text": "Calculate the field.", "question_type": "numerical", "options": None,
+        "correct_answer": "1 T", "expected_answer": "1 T", "explanation": "e", "learning_objective": "l",
+        "difficulty": "easy", "formula": "I", "quantities": {"I": {"value": 5.0, "unit": "A"}},
+    }]})})()
+
+    result = parse_generation_response(response)
+
+    assert result[0]["quantities"] == {"I": "5.0 A"}
+
+
 def test_generation_prompt_can_exclude_questions_already_in_exam_batch():
     request = QuestionGenerationRequest(
         subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
@@ -352,6 +401,25 @@ def test_numerical_prompt_excludes_unsupported_calculations_and_symbols():
 
     assert "Do not use trigonometric" in prompt
     assert "never symbols such as `×`, `^`, or `°`" in prompt
+
+
+def test_numerical_prompt_includes_self_consistent_worked_example():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="numerical", marks=1,
+        number_of_questions=1,
+    )
+    mcq_request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+
+    numerical_prompt = generation.build_generation_prompt(request, "Electricity and current")
+    retry_prompt = generation.build_numerical_retry_prompt(request, "Electricity and current", [])
+    mcq_prompt = generation.build_generation_prompt(mcq_request, "Electricity and current")
+
+    assert "Worked example" in numerical_prompt
+    assert "Worked example" in retry_prompt
+    assert "Worked example" not in mcq_prompt
 
 
 def test_workflow_retries_questions_not_grounded_in_curriculum_context():
