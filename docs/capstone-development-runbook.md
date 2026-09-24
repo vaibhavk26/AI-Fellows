@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-09-13.
+Last updated 2026-09-24.
 
 Completed:
 
@@ -56,11 +56,13 @@ Completed:
    - [x] Exact-match MCQ scoring and shared numerical parsing with ±5% tolerance
    - [x] Missing-answer handling, idempotent submission, and transactional topic performance
    - [x] Progress, weak-topic, attempt-history, and score-boundary tests
-   - [x] Full backend and frontend validation: 66 tests passing, including 9 Playwright browser tests
-- [x] **Section 10.5: Streamlit frontend** — 2026-09-13
+   - [x] Full backend and frontend validation: 78 tests collected, including 9 Playwright browser tests
+- [x] **Section 10.5: Streamlit frontend** — 2026-09-24
    - [x] Registration, login, session state, and sign-out
    - [x] Student dashboard, curriculum selection, multi-question MCQ/numerical exams, submission, and results
    - [x] Teacher question bank and generation controls
+   - [x] Async curriculum route handlers with cached, lazy parent-child loading in Streamlit
+   - [x] Background-thread loading for chained selectors and cached data-driven dashboard views
    - [x] Playwright coverage for authentication, role restrictions, dashboard/results states, empty-bank handling, teacher controls, and exam submission
 
 Not yet done:
@@ -80,6 +82,8 @@ This runbook assumes the following decisions from the implementation plan:
 - question types are limited to MCQ and Numerical
 - question status values are generated, validated, and rejected
 - teacher approval and long-answer grading are out of scope for the MVP
+- curriculum selector reads are cached with `st.cache_data`; only the child level for a changed parent is loaded
+- background selector loads use a session-scoped `ThreadPoolExecutor`; forms remain available while dependent options load
 
 ## 2. Prerequisites
 
@@ -104,7 +108,7 @@ For virtual environment creation, dependency installation, database setup, and s
 
 ## 2.1 Dependency Baseline
 
-Use the following dependency baseline for the MVP before implementation starts:
+Use the following dependency baseline for the MVP before implementation starts. Playwright also requires its browser binary, installed separately with `python -m playwright install chromium` after the Python packages are installed:
 
 The installation commands are in the [capstone/SETUP.md](../capstone/SETUP.md) quick-start guide; this section defines the approved package versions.
 

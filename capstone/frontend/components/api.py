@@ -1,5 +1,7 @@
 import os
-from typing import Any
+import time
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Callable
 
 import requests
 import streamlit as st
@@ -28,7 +30,7 @@ def _message(response: requests.Response) -> str:
 
 def request(method: str, path: str, **kwargs: Any) -> dict:
     headers = kwargs.pop("headers", {}).copy()
-    token = st.session_state.get("access_token")
+    token = kwargs.pop("access_token", None) or st.session_state.get("access_token")
     if token:
         headers["Authorization"] = f"Bearer {token}"
     try:
@@ -40,6 +42,90 @@ def request(method: str, path: str, **kwargs: Any) -> dict:
     if response.status_code == 204 or not response.content:
         return {}
     return response.json()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_subjects() -> list[dict]:
+    return get("/api/v1/curriculum/subjects", params={"page_size": 100}).get("data", [])
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_chapters_for_subject(subject_id: str) -> list[dict]:
+    return _load_chapters_for_subject(subject_id, access_token=st.session_state.get("access_token"))
+
+
+def _load_chapters_for_subject(subject_id: str, access_token: str | None = None) -> list[dict]:
+    if not subject_id:
+        return []
+    return get(
+        f"/api/v1/curriculum/subjects/{subject_id}/chapters",
+        params={"page_size": 100},
+        access_token=access_token,
+    ).get("data", [])
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_topics_for_chapter(chapter_id: str) -> list[dict]:
+    return _load_topics_for_chapter(chapter_id, access_token=st.session_state.get("access_token"))
+
+
+def _load_topics_for_chapter(chapter_id: str, access_token: str | None = None) -> list[dict]:
+    if not chapter_id:
+        return []
+    return get(
+        f"/api/v1/curriculum/chapters/{chapter_id}/topics",
+        params={"page_size": 100},
+        access_token=access_token,
+    ).get("data", [])
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_student_attempts() -> list[dict]:
+    return get("/api/v1/students/me/attempts", params={"status": "submitted", "page_size": 20}).get("data", [])
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_attempt_detail(attempt_id: str) -> dict:
+    return get(f"/api/v1/attempts/{attempt_id}")["data"]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_teacher_dashboard() -> dict:
+    return get("/api/v1/teachers/me/dashboard")["data"]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_teacher_questions() -> list[dict]:
+    return get("/api/v1/questions", params={"page_size": 100}).get("data", [])
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_student_progress() -> dict:
+    return get("/api/v1/students/me/progress", params={"page_size": 100})
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_weak_topics() -> dict:
+    return get("/api/v1/students/me/weak-topics", params={"page_size": 100})
+
+
+def _start_background_load(key: str, loader: Callable[..., Any], *args: Any) -> Future:
+    executor = st.session_state.setdefault("_background_executor", ThreadPoolExecutor(max_workers=8))
+    previous = st.session_state.get(key)
+    if isinstance(previous, Future) and not previous.done():
+        return previous
+    access_token = st.session_state.get("access_token")
+    future = executor.submit(loader, *args, access_token=access_token)
+    st.session_state[key] = future
+    return future
+
+
+def _background_result(future: Future, loading_message: str) -> Any:
+    if not future.done():
+        st.info(loading_message)
+        time.sleep(0.1)
+        st.rerun()
+    return future.result()
 
 
 def get(path: str, **kwargs: Any) -> dict:
