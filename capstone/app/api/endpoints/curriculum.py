@@ -45,7 +45,7 @@ def _topic_data(topic: Topic) -> dict:
 
 
 @router.get("/subjects")
-def list_subjects(
+async def list_subjects(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     current_user: UserResponse = Depends(get_current_user),
@@ -58,7 +58,7 @@ def list_subjects(
 
 
 @router.get("/subjects/{subject_id}/chapters")
-def list_chapters(
+async def list_chapters(
     subject_id: UUID,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -75,7 +75,7 @@ def list_chapters(
 
 
 @router.get("/chapters/{chapter_id}/topics")
-def list_topics(
+async def list_topics(
     chapter_id: UUID,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),

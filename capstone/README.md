@@ -16,7 +16,17 @@ The short sequence is:
 
 ## Current status
 
-The MVP includes authentication, curriculum browsing, question retrieval and teacher-only generation, exams with generation fallback, attempts, scoring, analytics, curriculum ingestion, FAISS retrieval, and Streamlit workflows for students and teachers. The automated suite currently contains 66 tests, including 9 browser tests. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
+The MVP includes authentication, curriculum browsing, question retrieval and teacher-only generation, exams with generation fallback, attempts, scoring, analytics, curriculum ingestion, FAISS retrieval, and Streamlit workflows for students and teachers. Curriculum routes use async FastAPI handlers, while the Streamlit frontend uses cached reads and background loading for chained selectors. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
+
+## Frontend caching note
+
+The Streamlit frontend follows a cache-first pattern for repeated data fetches. Use `@st.cache_data` for read-heavy API results and reuse cached values across reruns instead of triggering fresh requests for the same subject, chapter, topic, attempts, or dashboard data. When a parent selection changes, load only the dependent child data, and keep parent/child selection state in `st.session_state` so the UI stays responsive and does not refetch the same payloads repeatedly. Chained curriculum loads use a shared `ThreadPoolExecutor` helper; keep the generation and exam forms usable while child data is still loading, and validate the selected child before submitting.
+
+For browser tests, install the Playwright browser binary once after installing Python dependencies:
+
+```powershell
+.\.venv\Scripts\python.exe -m playwright install chromium
+```
 
 ## Project structure
 
