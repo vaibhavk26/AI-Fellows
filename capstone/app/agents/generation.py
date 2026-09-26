@@ -54,6 +54,21 @@ A second example using only supplied quantities, no named constants:
 Before finalizing each numerical question, mentally substitute your own `quantities` into your own
 `formula` and confirm the result equals your stated `correct_answer`; adjust one of them if they disagree."""
 
+_MCQ_WORKED_EXAMPLE = """Use this valid MCQ item as the exact structure to follow:
+{
+    "question_text": "Which quantity is measured in amperes?",
+    "options": [
+        {"key": "A", "text": "Electric current"},
+        {"key": "B", "text": "Voltage"},
+        {"key": "C", "text": "Resistance"},
+        {"key": "D", "text": "Power"}
+    ],
+    "correct_answer": "A", "expected_answer": "A",
+    "explanation": "Electric current is measured in amperes.",
+    "learning_objective": "Identify the unit of electric current.",
+    "difficulty": "easy", "question_type": "mcq"
+}"""
+
 
 def build_generation_prompt(
     request: QuestionGenerationRequest,
@@ -90,6 +105,7 @@ example `mu0*I/(2*pi*r)`. Write answers in plain decimal or scientific notation
 (for example, `1.24e8 m/s`), never symbols such as `×`, `^`, or `°`. A unit may be a single
 symbol (`N`, `T`, `m`) or a product/quotient of symbols joined with `·` or `/` (for example
 `N·m`, `m/s`).
+{_MCQ_WORKED_EXAMPLE if request.question_type == "mcq" else ""}
 {_NUMERICAL_WORKED_EXAMPLE if request.question_type == "numerical" else ""}
 Return syntactically valid JSON: separate array items with a single comma directly between
 the closing `}}` and the next opening `{{` (`}},{{`), never insert a stray quote character there.
@@ -145,6 +161,30 @@ CURRICULUM CONTEXT:
 """
 
 
+def build_mcq_retry_prompt(
+    request: QuestionGenerationRequest,
+    context: str,
+    previous_questions: list[dict],
+) -> str:
+    return f"""Your previous multiple-choice response was invalid. Replace every invalid item and return exactly
+{request.number_of_questions} Grade 10 MCQ question(s) as a JSON object with a `questions` array and no markdown.
+
+Each item must contain all of these fields: `question_text`, `options`, `correct_answer`, `expected_answer`,
+`explanation`, `learning_objective`, `difficulty`, and `question_type`.
+`options` must be an array of exactly four objects in this exact order:
+[{{"key":"A","text":"..."}},{{"key":"B","text":"..."}},{{"key":"C","text":"..."}},{{"key":"D","text":"..."}}]
+Every option text must be a non-empty, meaningful answer choice. `correct_answer` and `expected_answer` must both
+be exactly one of `A`, `B`, `C`, or `D`, and must contain the same key. Use only the curriculum context below.
+The difficulty must be `{request.difficulty}` and the question type must be `mcq`.
+
+PREVIOUS RESPONSE:
+{json.dumps(previous_questions)}
+
+CURRICULUM CONTEXT:
+{context}
+"""
+
+
 def build_grounding_retry_prompt(
     request: QuestionGenerationRequest,
     context: str,
@@ -176,7 +216,7 @@ def create_chat_model(max_tokens: int | None = None) -> ChatModel:
         raise RuntimeError("Groq provider is not configured")
     return ChatOpenAI(
         model=settings.llm_model,
-        temperature=0,
+        temperature=settings.llm_temperature,
         openai_api_key=settings.groq_api_key,
         openai_api_base=settings.llm_base_url,
         request_timeout=settings.llm_timeout_seconds,
