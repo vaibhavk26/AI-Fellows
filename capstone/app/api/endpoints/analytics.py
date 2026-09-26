@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from datetime import datetime
+from datetime import date, datetime
 
 from app.api.dependencies.auth import get_current_student, get_current_teacher
 from app.api.dependencies.database import get_db
@@ -31,6 +31,14 @@ def progress(subject_id: UUID | None = None, chapter_id: UUID | None = None, top
 def weak_topics(page: int = Query(default=1, ge=1), page_size: int = Query(default=20, ge=1, le=100), current_user: UserResponse = Depends(get_current_student), db: Session = Depends(get_db)) -> dict:
 	rows, total = AnalyticsService.list_performance(db, current_user.id, weak_only=True, page=page, page_size=page_size)
 	return _page(rows, total, page, page_size)
+
+
+@router.get("/analytics")
+def student_analytics(subject_id: UUID | None = None, chapter_id: UUID | None = None, from_date: date | None = None, to_date: date | None = None, current_user: UserResponse = Depends(get_current_student), db: Session = Depends(get_db)) -> dict:
+	if from_date and to_date and from_date > to_date:
+		return {"data": {"summary": {"attempts": 0, "score": 0, "max_score": 0, "score_percentage": 0, "subjects": 0, "chapters": 0, "topics": 0}, "subjects": [], "chapters": [], "topics": [], "attempts_detail": []}, "meta": None}
+	data = AnalyticsService.dashboard_analytics(db, current_user.id, subject_id=subject_id, chapter_id=chapter_id, from_date=from_date, to_date=to_date)
+	return {"data": data, "meta": None}
 
 
 @router.get("/attempts")

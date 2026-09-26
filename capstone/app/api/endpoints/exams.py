@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -8,6 +9,7 @@ from app.api.dependencies.database import get_db
 from app.api.schemas.auth import UserResponse
 from app.api.schemas.exam import AttemptSubmissionRequest, ExamGenerationRequest
 from app.db.models.attempt import StudentAnswer, StudentAttempt
+from app.db.models.curriculum import Topic
 from app.db.models.exam import Exam
 from app.db.models.question import Question
 from app.services.analytics_service import AnalyticsService
@@ -22,9 +24,21 @@ def _exam_data(db: Session, exam: Exam) -> dict:
 
 
 def _attempt_result(db: Session, attempt: StudentAttempt) -> dict:
-	answer_rows = db.query(StudentAnswer, Question).join(Question, Question.id == StudentAnswer.question_id).filter(StudentAnswer.attempt_id == attempt.id).all()
-	weak_rows, _ = AnalyticsService.list_performance(db, attempt.student_id, weak_only=True, page_size=100)
-	return {"id": attempt.id, "exam_id": attempt.exam_id, "student_id": attempt.student_id, "status": attempt.status, "score": attempt.score, "max_score": attempt.max_score, "percentage": attempt.percentage, "submitted_at": attempt.submitted_at, "answers": [{"question_id": answer.question_id, "submitted_answer": answer.submitted_answer, "is_correct": answer.is_correct, "score_awarded": answer.score_awarded, "max_score": answer.max_score, "correct_answer": question.correct_answer, "explanation": question.explanation} for answer, question in answer_rows], "weak_topics": [{"topic_id": performance.topic_id, "topic_name": topic_name, "attempts": performance.attempts, "correct_answers": performance.correct_answers, "score_percentage": performance.score_percentage, "status": performance.status, "last_updated": performance.last_updated} for performance, topic_name in weak_rows]}
+	answer_rows = db.query(StudentAnswer, Question, Topic.name).join(Question, Question.id == StudentAnswer.question_id).outerjoin(Topic, Topic.id == Question.topic_id).filter(StudentAnswer.attempt_id == attempt.id).all()
+	topic_scores = {}
+	answers = []
+	for answer, question, topic_name in answer_rows:
+		answers.append({"question_id": answer.question_id, "question_text": question.question_text, "question_type": question.question_type, "options": question.options, "topic_id": question.topic_id, "topic_name": topic_name, "submitted_answer": answer.submitted_answer, "is_correct": answer.is_correct, "score_awarded": answer.score_awarded, "max_score": answer.max_score, "correct_answer": question.correct_answer, "explanation": question.explanation})
+		if question.topic_id is not None:
+			score = topic_scores.setdefault(question.topic_id, {"topic_name": topic_name, "earned": Decimal("0"), "possible": Decimal("0")})
+			score["earned"] += Decimal(answer.score_awarded)
+			score["possible"] += Decimal(answer.max_score)
+	weak_topics = []
+	for topic_id, score in topic_scores.items():
+		percentage = (score["earned"] * Decimal("100") / score["possible"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+		if AnalyticsService.status_for(percentage) == "needs_practice":
+			weak_topics.append({"topic_id": topic_id, "topic_name": score["topic_name"], "score_percentage": percentage, "status": "needs_practice"})
+	return {"id": attempt.id, "exam_id": attempt.exam_id, "student_id": attempt.student_id, "status": attempt.status, "score": attempt.score, "max_score": attempt.max_score, "percentage": attempt.percentage, "submitted_at": attempt.submitted_at, "answers": answers, "weak_topics": weak_topics}
 
 
 @router.post("/exams/generate", status_code=status.HTTP_201_CREATED)

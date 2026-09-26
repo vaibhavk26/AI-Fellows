@@ -3,7 +3,12 @@ import streamlit as st
 from components.api import ApiError, post
 
 
-st.set_page_config(page_title="Capstone Learning", page_icon="📘", layout="wide")
+st.set_page_config(
+	page_title="ExamIQ",
+	page_icon="📘",
+	layout="wide",
+	initial_sidebar_state="expanded",
+)
 
 
 def login() -> None:
@@ -45,7 +50,7 @@ if st.session_state.get("user"):
 	st.write("Choose a page from the sidebar to review progress, take an exam, or manage questions.")
 	st.info("Start with Dashboard for progress, or Exam to create a practice session.")
 else:
-	st.title("Capstone Learning")
+	st.title("ExamIQ")
 	st.write("A focused workspace for curriculum-grounded practice and feedback.")
 	sign_in, create_account = st.tabs(["Sign in", "Create account"])
 	with sign_in:
