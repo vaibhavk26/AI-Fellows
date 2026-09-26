@@ -18,6 +18,7 @@ from app.agents.generation import (
     ChatModel,
     build_generation_prompt,
     build_grounding_retry_prompt,
+    build_mcq_retry_prompt,
     build_numerical_retry_prompt,
     create_chat_model,
     parse_generation_response,
@@ -173,12 +174,37 @@ class QuestionGenerationWorkflow:
     def generate_questions(self, state: WorkflowState) -> WorkflowState:
         model = self.model or create_chat_model(max_tokens=self._estimate_max_tokens(state["request"]))
         context = "\n\n".join(item.text for item in state["context"])
+        request = state["request"]
+        database = getattr(self, "database", None)
+        existing_texts = []
+        if database is not None:
+            existing_texts = [
+                question_text
+                for (question_text,) in database.query(Question.question_text).filter(
+                    Question.subject_id == request.subject_id,
+                    Question.chapter_id == request.chapter_id,
+                    Question.topic_id == request.topic_id,
+                    Question.question_type == request.question_type,
+                    Question.difficulty == request.difficulty,
+                ).all()
+            ]
+        avoid_questions = list(dict.fromkeys((self.avoid_question_texts or []) + existing_texts))
         try:
             response = self._invoke_with_rate_limit_retry(
-                model, build_generation_prompt(state["request"], context, self.avoid_question_texts)
+                model, build_generation_prompt(request, context, avoid_questions)
             )
             generated = parse_generation_response(response)
             generated = [self._normalize_generated_item(item) for item in generated]
+            if request.question_type == "mcq" and any(
+                not self._has_valid_mcq_options(item) for item in generated
+            ):
+                retry_response = self._invoke_with_rate_limit_retry(
+                    model, build_mcq_retry_prompt(request, context, generated)
+                )
+                generated = [
+                    self._normalize_generated_item(item)
+                    for item in parse_generation_response(retry_response)
+                ]
             if state["request"].question_type == "numerical" and any(
                 not self._has_valid_numerical_calculation(item) for item in generated
             ):
@@ -248,6 +274,20 @@ class QuestionGenerationWorkflow:
         expected_value = expected_answer[0]
         return calculated is not None and abs(calculated - expected_value) <= max(
             abs(expected_value) * Decimal("0.0001"), Decimal("0.000001")
+        )
+
+    @staticmethod
+    def _has_valid_mcq_options(item: GeneratedQuestion) -> bool:
+        options = item.get("options")
+        keys = [option.get("key") for option in options or [] if isinstance(option, dict)]
+        texts = [str(option.get("text", "")).strip() for option in options or [] if isinstance(option, dict)]
+        correct_answer = str(item.get("correct_answer", "")).strip().upper()
+        expected_answer = str(item.get("expected_answer", "")).strip().upper()
+        return (
+            keys == ["A", "B", "C", "D"]
+            and all(texts)
+            and correct_answer in keys
+            and expected_answer == correct_answer
         )
 
     @staticmethod
@@ -363,11 +403,6 @@ class QuestionGenerationWorkflow:
             for item, validation in zip(state["generated"], state["validations"], strict=True):
                 item = self._normalize_generated_item(item)
                 options = item.get("options") if request.question_type == "mcq" else None
-                if request.question_type == "mcq" and (
-                    not isinstance(options, list)
-                    or [option.get("key") for option in options if isinstance(option, dict)] != ["A", "B", "C", "D"]
-                ):
-                    options = [{"key": key, "text": ""} for key in ("A", "B", "C", "D")]
                 question = Question(
                     subject_id=request.subject_id, chapter_id=request.chapter_id, topic_id=request.topic_id,
                     question_type=request.question_type, difficulty=request.difficulty, bloom_level=request.bloom_level,

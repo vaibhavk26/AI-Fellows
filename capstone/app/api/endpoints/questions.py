@@ -15,7 +15,7 @@ from app.services.question_service import QuestionService
 router = APIRouter(prefix="/api/v1/questions", tags=["questions"])
 
 
-def _question_data(db: Session, question) -> dict:
+def _question_data(db: Session, question, rejection_reasons: list[str] | None = None) -> dict:
 	source_references = db.query(SourceReference).join(
 		QuestionSourceReference, QuestionSourceReference.source_reference_id == SourceReference.id
 	).filter(QuestionSourceReference.question_id == question.id).all()
@@ -25,7 +25,7 @@ def _question_data(db: Session, question) -> dict:
 		"difficulty": question.difficulty, "bloom_level": question.bloom_level, "marks": question.marks,
 		"question_text": question.question_text, "options": question.options, "expected_answer": question.expected_answer,
 		"explanation": question.explanation, "learning_objective": question.learning_objective,
-		"source_references": [{"id": source.id, "document_id": source.document_id, "page_number": source.page_number, "chunk_id": source.chunk_id, "excerpt": source.excerpt} for source in source_references], "status": question.status, "created_by": question.created_by, "created_at": question.created_at,
+		"source_references": [{"id": source.id, "document_id": source.document_id, "page_number": source.page_number, "chunk_id": source.chunk_id, "excerpt": source.excerpt} for source in source_references], "status": question.status, "rejection_reasons": rejection_reasons or [], "created_by": question.created_by, "created_at": question.created_at,
 	}
 
 
@@ -48,7 +48,14 @@ def generate_questions(
 		raise HTTPException(status_code=code_to_status.get(exc.code, status.HTTP_500_INTERNAL_SERVER_ERROR), detail={"code": exc.code, "message": str(exc)}) from exc
 	return {
 		"data": {
-			"questions": [_question_data(db, question) for question in result["questions"]],
+			"questions": [
+				_question_data(
+					db,
+					question,
+					next((item["failure_reasons"] for item in result["validation"] if item["question_id"] == question.id), []),
+				)
+				for question in result["questions"]
+			],
 			"validation": result["validation"],
 		},
 		"meta": result["meta"],

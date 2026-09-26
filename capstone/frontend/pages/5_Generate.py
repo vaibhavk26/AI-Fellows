@@ -89,6 +89,9 @@ if require_auth("teacher"):
                     for question in result["data"]["questions"]:
                         st.write(question["question_text"])
                         st.caption(f"{question['status']} · {question['difficulty']} · {question['marks']} mark(s)")
+                        if question["status"] == "rejected":
+                            reasons = question.get("rejection_reasons") or ["No rejection reason was recorded."]
+                            st.error("Rejection reason(s): " + "; ".join(reasons))
     except ApiError as error:
         if error.status_code == 429:
             st.warning(

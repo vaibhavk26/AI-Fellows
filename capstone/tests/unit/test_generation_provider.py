@@ -19,6 +19,7 @@ def test_create_chat_model_configures_bounded_provider_request(monkeypatch):
             llm_base_url="https://example.test/v1",
             llm_timeout_seconds=12.0,
             llm_max_tokens=8192,
+            llm_temperature=0.7,
         ),
     )
 
@@ -29,5 +30,6 @@ def test_create_chat_model_configures_bounded_provider_request(monkeypatch):
 
     assert captured["request_timeout"] == 12.0
     assert captured["max_tokens"] == 8192
+    assert captured["temperature"] == 0.7
     assert captured["max_retries"] == 0
     assert captured["model_kwargs"]["reasoning_effort"] == "low"

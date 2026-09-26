@@ -116,6 +116,19 @@ def test_generation_prompt_can_exclude_questions_already_in_exam_batch():
     assert "What is current?" in prompt
 
 
+def test_mcq_retry_prompt_requires_non_empty_options_and_matching_answer_keys():
+    request = QuestionGenerationRequest(
+        subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
+        number_of_questions=1,
+    )
+
+    prompt = generation.build_mcq_retry_prompt(request, "Electricity and current", [{"options": []}])
+
+    assert '"key":"A"' in prompt
+    assert "Every option text must be a non-empty" in prompt
+    assert "correct_answer` and `expected_answer` must both" in prompt
+
+
 def test_workflow_validates_mcq_and_rejects_duplicate():
     request = QuestionGenerationRequest(
         subject_id=uuid4(), chapter_id=uuid4(), difficulty="easy", question_type="mcq", marks=1,
