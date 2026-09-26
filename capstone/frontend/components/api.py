@@ -104,6 +104,10 @@ def get_student_progress() -> dict:
     return get("/api/v1/students/me/progress", params={"page_size": 100})
 
 
+def get_student_analytics(params: dict | None = None) -> dict:
+    return get("/api/v1/students/me/analytics", params=params or {})
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def get_weak_topics() -> dict:
     return get("/api/v1/students/me/weak-topics", params={"page_size": 100})

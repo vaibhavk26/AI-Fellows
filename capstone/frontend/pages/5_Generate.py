@@ -1,3 +1,5 @@
+import time
+
 import streamlit as st
 
 from components.api import (
@@ -16,6 +18,12 @@ from components.sidebar import render
 
 render()
 st.title("Generate questions")
+
+
+def _request_generation(payload: dict, access_token: str | None = None) -> dict:
+    return post("/api/v1/questions/generate", json=payload, access_token=access_token)
+
+
 if require_auth("teacher"):
     try:
         subjects = get_subjects()
@@ -84,14 +92,29 @@ if require_auth("teacher"):
                         "number_of_questions": number,
                         "bloom_level": bloom,
                     }
-                    result = post("/api/v1/questions/generate", json=payload)
-                    st.success(f"Generated {result['meta']['validated']} validated question(s).")
-                    for question in result["data"]["questions"]:
-                        st.write(question["question_text"])
-                        st.caption(f"{question['status']} · {question['difficulty']} · {question['marks']} mark(s)")
-                        if question["status"] == "rejected":
-                            reasons = question.get("rejection_reasons") or ["No rejection reason was recorded."]
-                            st.error("Rejection reason(s): " + "; ".join(reasons))
+                    st.session_state["generation_started_at"] = time.monotonic()
+                    st.session_state["generation_future"] = _start_background_load(
+                        "_generation_future", _request_generation, payload
+                    )
+            generation_future = st.session_state.get("generation_future")
+            if generation_future is not None:
+                if not generation_future.done():
+                    elapsed = time.monotonic() - st.session_state["generation_started_at"]
+                    progress = min(95, int(elapsed / 90 * 95))
+                    st.progress(progress, text="Generating questions...")
+                    time.sleep(0.25)
+                    st.rerun()
+                st.session_state.pop("generation_future", None)
+                st.session_state.pop("generation_started_at", None)
+                result = generation_future.result()
+                st.progress(100, text="Generation complete")
+                st.success(f"Generated {result['meta']['validated']} validated question(s).")
+                for question in result["data"]["questions"]:
+                    st.write(question["question_text"])
+                    st.caption(f"{question['status']} · {question['difficulty']} · {question['marks']} mark(s)")
+                    if question["status"] == "rejected":
+                        reasons = question.get("rejection_reasons") or ["No rejection reason was recorded."]
+                        st.error("Rejection reason(s): " + "; ".join(reasons))
     except ApiError as error:
         if error.status_code == 429:
             st.warning(

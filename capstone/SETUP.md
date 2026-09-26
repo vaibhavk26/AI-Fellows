@@ -138,7 +138,7 @@ Invoke-RestMethod -Uri http://localhost:8000/health -Method Get
 Expected output is `status: ok`. Start Streamlit in a third terminal:
 
 ```powershell
-.\.venv\Scripts\python.exe -m streamlit run frontend/streamlit_app.py --server.port 8501
+.\.venv\Scripts\python.exe -m streamlit run frontend/Home.py --server.port 8501
 ```
 
 Open the app at http://localhost:8501, API docs at http://localhost:8000/docs, and ReDoc at http://localhost:8000/redoc.

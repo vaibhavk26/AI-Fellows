@@ -67,7 +67,7 @@ def test_student_can_register_and_sign_out(page: Page, frontend_url: str):
     credentials = _register(page, frontend_url)
     _sign_in(page, credentials, frontend_url)
     page.get_by_role("link", name="Dashboard").click()
-    page.get_by_role("heading", name="Progress dashboard").wait_for()
+    page.get_by_role("heading", name="Student Performance").wait_for()
     page.get_by_role("button", name="Sign out").click()
 
     page.goto(f"{frontend_url}/")
@@ -77,8 +77,11 @@ def test_student_can_register_and_sign_out(page: Page, frontend_url: str):
 def test_student_dashboard_and_empty_results_states(page: Page, student_credentials: dict[str, str], frontend_url: str):
     _sign_in(page, student_credentials, frontend_url)
     page.get_by_role("link", name="Dashboard").click()
-    page.get_by_role("heading", name="Progress dashboard").wait_for()
-    page.get_by_text("Topics practiced").wait_for()
+    page.get_by_role("heading", name="Student Performance").wait_for()
+    page.get_by_text("Exam attempts").wait_for()
+    page.get_by_role("combobox", name="Subject").wait_for()
+    page.get_by_role("combobox", name="Chapter").wait_for()
+    page.get_by_role("combobox", name="Period").wait_for()
 
     page.get_by_role("link", name="Results").click()
     page.get_by_role("heading", name="Results").wait_for()
@@ -161,3 +164,15 @@ def test_student_can_complete_three_question_exam(
     page.get_by_role("heading", name="Results").wait_for()
     page.get_by_text("Answer review").wait_for(timeout=15_000)
     page.get_by_text("Question 3").wait_for(timeout=15_000)
+
+    page.get_by_role("link", name="Dashboard").click()
+    page.get_by_role("heading", name="Progress over attempts").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Subject performance").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Chapter performance").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Topic performance").wait_for(timeout=15_000)
+
+    page.get_by_role("link", name="Dashboard").click()
+    page.get_by_role("heading", name="Subject performance").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Chapter performance").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Topic performance").wait_for(timeout=15_000)
+    page.get_by_role("heading", name="Score by attempt").wait_for(timeout=15_000)

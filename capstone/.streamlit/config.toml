@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#58A6FF"              # GitHub blue
+backgroundColor="#0D1117"           # GitHub dark background
+secondaryBackgroundColor="#161B22"  # GitHub panel background
+textColor="#C9D1D9"                 # GitHub soft grey text
+font="sans serif"

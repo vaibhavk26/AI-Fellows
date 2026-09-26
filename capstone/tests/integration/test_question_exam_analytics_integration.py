@@ -134,14 +134,48 @@ def test_question_exam_attempt_and_analytics_flow(seeded_data):
     assert result["score"] == "5.00"
     assert result["percentage"] == "100.00"
     assert len(result["answers"]) == 2
+    mcq_answer = next(answer for answer in result["answers"] if answer["question_type"] == "mcq")
+    assert mcq_answer["question_text"] == "Which option is correct?"
+    assert mcq_answer["options"][0] == {"key": "A", "text": "Correct"}
+    assert result["weak_topics"] == []
     assert client.post(f"/api/v1/attempts/{attempt_id}/submit", headers=student_headers, json={"answers": answers}).status_code == 200
 
     progress = client.get("/api/v1/students/me/progress", headers=student_headers)
     assert progress.status_code == 200
     assert progress.json()["data"][0]["attempts"] == 1
     assert progress.json()["data"][0]["score_percentage"] == "100.00"
+    dashboard = client.get("/api/v1/students/me/analytics", headers=student_headers).json()["data"]
+    assert dashboard["summary"] == {
+        "attempts": 1,
+        "questions_answered": 2,
+        "score": "5.00",
+        "max_score": "5",
+        "score_percentage": "100.00",
+        "subjects": 1,
+        "chapters": 1,
+        "topics": 1,
+    }
+    assert dashboard["subjects"][0]["name"] == seeded_data["subject"].name
+    assert dashboard["chapters"][0]["name"] == seeded_data["chapter"].name
+    assert dashboard["topics"][0]["name"] == seeded_data["topic"].name
+    filtered_dashboard = client.get(
+        "/api/v1/students/me/analytics",
+        params={"subject_id": str(seeded_data["subject"].id), "chapter_id": str(seeded_data["chapter"].id)},
+        headers=student_headers,
+    ).json()["data"]
+    assert filtered_dashboard["summary"]["attempts"] == 1
+    assert filtered_dashboard["summary"]["questions_answered"] == 2
     assert client.get("/api/v1/students/me/weak-topics", headers=student_headers).json()["data"] == []
     assert client.get("/api/v1/students/me/attempts", headers=student_headers).json()["meta"]["total"] == 1
+
+    second_attempt = client.post(f"/api/v1/exams/{exam['id']}/attempts", headers=student_headers).json()["data"]
+    incorrect_answers = [{"question_id": item["question"]["id"], "answer": "B" if item["question"]["question_type"] == "mcq" else "90 m"} for item in exam["questions"]]
+    second_submission = client.post(f"/api/v1/attempts/{second_attempt['id']}/submit", headers=student_headers, json={"answers": incorrect_answers})
+    assert second_submission.status_code == 201
+    assert second_submission.json()["data"]["weak_topics"][0]["score_percentage"] == "0.00"
+    first_attempt_result = client.get(f"/api/v1/attempts/{attempt_id}", headers=student_headers).json()["data"]
+    assert first_attempt_result["weak_topics"] == []
+
     assert client.get("/api/v1/teachers/me/dashboard", headers=teacher_headers).json()["data"]["questions"] == {"generated": 0, "validated": 2, "rejected": 1}
 
 
