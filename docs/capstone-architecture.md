@@ -2,11 +2,11 @@
 
 ## 1. Introduction
 
-This capstone project delivers an AI-powered personalized learning and examination system for CBSE Class 10 students in Physics and Mathematics. The architecture is designed as a simple but modular MVP that supports student self-learning, teacher review and approval workflows, AI-based question generation, validation, personalization, and performance tracking.
+This capstone project delivers an AI-powered personalized learning and examination system for CBSE Class 10 students in Physics and Mathematics. The architecture is designed as a simple but modular MVP that supports student self-learning, teacher question generation and review, roster-based exam assignment, AI-based validation, and performance tracking. Formal teacher approval remains a future extension.
 
 The system is intentionally structured so that the core flow remains easy to build and demonstrate within a short capstone timeline, while still being extensible for future enhancements such as additional subjects, chapters, advanced AI coaching, or broader school-level deployment.
 
-The current MVP boundary is narrower than the broader architecture diagram: the implemented flow supports MCQ and numerical generation, validation, student exams, scoring, analytics, and teacher generation/review. Teacher approval, coaching, assignments, badges, and written-answer evaluation are extension points, not active local workflows.
+The current implementation supports MCQ and numerical generation, validation, student exams and scoring, student analytics, teacher question generation/review, explicit teacher-owned student rosters, assignment of teacher-created exams to roster members, and basic analytics for assigned exams. Teacher approval, coaching, badges, written-answer evaluation, and school-wide analytics remain extensions rather than active local workflows.
 
 ---
 
@@ -41,7 +41,7 @@ flowchart TD
     VDB[(Vector DB)]
     LLM[LLM Provider]
     EMB[Embedding Model]
-    TA[Teacher Approval Checkpoint]
+   TA[Future: Teacher Approval Checkpoint]
 
     U --> FE
     FE --> API
@@ -107,16 +107,14 @@ The system follows a layered architecture with clear separation of concerns:
 
 ### LangGraph Workflow Role
 
-The project uses LangGraph as the coordination layer for the agentic workflow. Each major flow is modeled as a graph state with transitions such as:
+LangGraph coordinates the implemented question-generation workflow:
 
-- generate_question_set
+- retrieve_context
+- generate_questions
 - validate_questions
-- teacher_review
-- approve_or_reject
-- update_topic_performance
-- recommend_targeted_practice
+- save
 
-This keeps the AI logic stateful, readable, and easier to debug than a purely imperative sequence of function calls.
+Exam assignment and teacher analytics are handled by API services, not LangGraph. Teacher approval and personalized coaching are future workflow extensions. Keeping the generation graph focused makes the active AI flow stateful, readable, and easier to debug.
 
 ---
 
@@ -128,10 +126,11 @@ Technology: Streamlit
 
 Responsibilities:
 - Student exam creation and submission
-- Teacher question generation and review
+- Teacher question generation, review, and exam assignment to roster students
 - Question bank management
 - Student progress dashboard
-- Weak-area practice and badges
+- Teacher assignment completion and score summaries
+- Weak-area practice; badges remain a future enhancement
 
 Design characteristics:
 - Simple and fast to build for MVP
@@ -177,7 +176,7 @@ Key modules:
 - Manage workflow state across multiple AI steps
 - Coordinate agents in sequence
 - Handle retry logic after validation failures
-- Support teacher approval checkpoints
+- Future extension: teacher approval checkpoints
 - Maintain the learning loop for personalized practice
 
 This makes the project more clearly agentic than a simple function call pipeline and fits the capstone’s “Generate → Validate → Examine → Evaluate → Analyze → Personalize” objective.

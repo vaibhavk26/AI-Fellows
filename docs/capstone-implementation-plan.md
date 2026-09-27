@@ -33,12 +33,15 @@ The system must:
 - Question status lifecycle: generated -> validated or rejected
 - Auto-evaluation with exact match for MCQ and ±5% tolerance for numerical answers
 - Student performance and weak-topic analytics
-- Teacher page for generating questions and basic class statistics
+- Teacher question generation and question-bank review
+- Teacher-owned student rosters and assignment of teacher-created exams
+- Basic teacher analytics for assignment completion and submitted scores on teacher-owned exams
 
 ### Out of scope for MVP
 - short-answer or long-answer grading
 - teacher approval workflow
 - learning-coach recommendations
+- points and badges
 - advanced analytics dashboards
 - competency-based question types
 - multi-stage approval logic or complex agent routing
@@ -63,7 +66,7 @@ The system must:
 ### Backend
 - app/main.py: FastAPI application entry point
 - app/core/: config, settings, security, JWT utilities
-- app/api/endpoints/: auth, questions, exams, analytics
+- app/api/endpoints/: auth, questions, exams, analytics, teachers
 - app/api/schemas/: request and response models
 - app/db/: models, session, migrations
 - app/services/: exam logic, analytics logic, RAG service layer
@@ -72,7 +75,7 @@ The system must:
 - app/rag/: ingestion, chunking, retrieval, FAISS integration
 
 ### Frontend
-- frontend/streamlit_app.py: entry point
+- frontend/Home.py: Streamlit entry point
 - frontend/pages/: Dashboard, Exam, Results, Teacher, Generate
 - frontend/components/: auth widgets, sidebar, charts
 
@@ -151,7 +154,7 @@ AI-Fellows/
 │   │   ├── graph/
 │   │   └── rag/
 │   ├── frontend/
-│   │   ├── streamlit_app.py
+│   │   ├── Home.py
 │   │   ├── pages/
 │   │   └── components/
 │   ├── tests/

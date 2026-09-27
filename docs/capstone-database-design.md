@@ -4,7 +4,7 @@
 
 This design defines the PostgreSQL schema for the AI-powered personalized learning and examination system for CBSE Class 10 Physics and Mathematics. PostgreSQL is the authoritative store for identity, curriculum metadata, generated questions, exams, attempts, answers, validation results, and topic performance. FAISS remains a rebuildable retrieval index and is not represented as relational business data.
 
-The MVP persists the complete student exam path: authenticate, browse the curriculum discovered from subject PDFs, generate and validate MCQ or numerical questions, create an exam, submit an attempt, calculate results, and update topic performance. The schema also includes explicitly separated extension tables for teacher approval, exam assignments, badges, and coach recommendations required by the broader requirements but deferred by the current API and runbook.
+The current implementation persists the student exam path and teacher assignment workflow: teachers maintain explicit student rosters, assign their own exams to roster members, and view completion and score summaries for those exams. Badge awards, coach recommendations, and teacher approval remain deferred extensions.
 
 ### Scope decisions
 
@@ -63,12 +63,14 @@ The runbook connection format is `postgresql+psycopg2://...`. Unit tests mock LL
 | Student attempt | One student's run through an exam | One student/exam |
 | Student answer | Answer and score for one exam question | One attempt/question |
 | Topic performance | Current aggregate performance for one student/topic | One student/topic |
+| Teacher-student roster | Explicit association that authorizes exam assignment | One teacher/student pair |
 
 ### Extension entities
 
 | Entity | Purpose | Current API status |
 |---|---|---|
-| Exam assignment | Teacher-to-student assignment | Post-MVP endpoint |
+| Teacher-student roster | Explicit teacher/student relationship | Active API and UI |
+| Exam assignment | Teacher-to-student assignment | Active API and UI |
 | Badge | System-defined achievement | Post-MVP endpoint |
 | Student badge | Award event for a student | Post-MVP endpoint |
 | Practice recommendation | Persisted learning-coach recommendation | Post-MVP endpoint |
@@ -336,7 +338,17 @@ Unique constraint: `(attempt_id, question_id)`. The service verifies that `quest
 
 Unique constraint: `(student_id, topic_id)`. `score_percentage` and `status` are derived by the analytics service from aggregate counters; database checks prevent invalid stored values.
 
-### 6.17 Extension tables
+### 6.17 Teacher workflow and extension tables
+
+`teacher_students` records which registered students a teacher may select for exam assignment. It is created by migration `9a4c8d1e2f30_teacher_student_roster`.
+
+| Column | Data Type | Nullable | Default | Key/Constraint | Description |
+|---|---|---:|---|---|---|
+| `teacher_id` | `uuid` | No | None | PK/FK `teacher_profiles.user_id` | Teacher who owns the roster entry |
+| `student_id` | `uuid` | No | None | PK/FK `student_profiles.user_id` | Student in the teacher's roster |
+| `created_at` | `timestamptz` | No | `now()` | None | Roster entry creation time |
+
+The composite primary key `(teacher_id, student_id)` prevents duplicate roster entries. Both foreign keys use `ON DELETE RESTRICT` and `ON UPDATE CASCADE`.
 
 `exam_assignments`:
 
@@ -573,7 +585,11 @@ erDiagram
 | `GET /students/me/progress` | `topic_performance`, `topics` | Read | `(student_id, topic/topic filters)` | Paginated aggregate |
 | `GET /students/me/weak-topics` | `topic_performance`, `topics` | Read | student and `status = needs_practice` | Order by percentage then oldest update |
 | `GET /students/me/attempts` | `student_attempts`, `exams` | Read | student/status/date range | Paginated, owner scoped |
-| `GET /teachers/me/dashboard` | `questions`, `exams` | Read/aggregate | `created_by` | Teacher-owned counts; no cross-student analytics |
+| `GET /teachers/me/students` | `teacher_students`, `users` | Read | `teacher_id` | Teacher-owned roster only |
+| `POST /teachers/me/students` | `teacher_students`, `users` | Write | teacher and registered student IDs | Adds an existing student to that teacher's roster |
+| `POST /exams/{exam_id}/assignments` | `exam_assignments`, `teacher_students`, `exams` | Write | exam ownership and roster membership | Teacher assigns own exams to roster students only |
+| `GET /students/me/assignments` | `exam_assignments`, `exams` | Read | `student_id` | Student sees only their assignments |
+| `GET /teachers/me/dashboard` | `questions`, `exams`, `exam_assignments`, `student_attempts` | Read/aggregate | `created_by` | Completion and submitted-score summaries for teacher-owned exams |
 
 ### Field transformations and derived values
 
@@ -586,9 +602,9 @@ erDiagram
 - Pagination `page`, `page_size`, `total`, and `has_next` are calculated metadata, not persisted fields.
 - JWT access tokens, logout state, prompts, raw LLM output, FAISS vectors, and API keys are not persisted here.
 
-### Post-MVP API support
+### Active and planned API support
 
-Approval, teacher assignments, practice recommendations, badges, and teacher/student analytics use `exam_assignments`, `practice_recommendations`, `badges`, `student_badges`, and existing performance tables. Their current absence from the MVP endpoint set is an intentional API scope decision, not an orphaned table.
+Teacher rosters and exam assignments are active API operations backed by `teacher_students` and `exam_assignments`. Basic teacher analytics aggregate assignments and submitted attempts for teacher-owned exams. Teacher approval, practice recommendations, badges, and more detailed teacher/student analytics remain planned extensions.
 
 ## 10. Requirements-to-Database Traceability
 
@@ -610,7 +626,7 @@ Approval, teacher assignments, practice recommendations, badges, and teacher/stu
 | FR-SH-01 | Coach recommendations | `practice_recommendations`, `topic_performance` | focus, difficulty, mix | extension-ready status and FK rules |
 | FR-SH-02 | Progress trends | `student_attempts`, `student_answers`, `topic_performance` | historical attempts and aggregate | submitted attempt history retained |
 | FR-SH-03 | Points/badges | `badges`, `student_badges` | code, points, earned time | unique award per badge/student |
-| FR-SH-04 | Teacher assignments | `exam_assignments` | exam, student, assigned_by | unique assignment and lifecycle checks |
+| FR-SH-04 | Teacher assignments | `teacher_students`, `exam_assignments` | roster teacher/student, exam, assigned_by | roster membership, exam ownership, unique assignment, lifecycle checks |
 | FR-SH-05 | Dashboard outcomes | `exams`, `student_attempts`, `topic_performance` | scores and ownership | indexed teacher and student reporting |
 | FR-CH-01 | Extensible subjects/chapters | `subjects`, `chapters`, `topics` | active hierarchy | no hard-coded table redesign required |
 | FR-CH-02 | Long-form evaluation | `questions`, `student_answers` | reserved type, answer, feedback extension | type reserved; evaluation logic not MVP |
@@ -622,7 +638,7 @@ Approval, teacher assignments, practice recommendations, badges, and teacher/stu
 | NFR-MH-04 | Maintainability/extensibility | hierarchy and normalized modules | stable FKs/statuses | Alembic migrations |
 | NFR-CH-01 | Growth | indexed core tables | UUIDs and indexes | pagination and selective indexes |
 
-The broader proposal's FR-MH-08 teacher approval and FR-SH-04 assignment flows are not current MVP API operations. Their data structures are included because they are explicit requirements; the implementation checklist marks their endpoints as deferred.
+The teacher approval portion of FR-MH-08 remains deferred. FR-SH-04 teacher assignment is implemented for explicit teacher rosters and teacher-owned exams; school-wide roster management is not included.
 
 ## 11. Data Integrity and Validation
 
@@ -1032,6 +1048,13 @@ CREATE TABLE topic_performance (
     CONSTRAINT ck_topic_performance_status CHECK (status IN ('strong', 'good', 'needs_practice'))
 );
 
+CREATE TABLE teacher_students (
+    teacher_id uuid NOT NULL REFERENCES teacher_profiles(user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    student_id uuid NOT NULL REFERENCES student_profiles(user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (teacher_id, student_id)
+);
+
 CREATE TABLE exam_assignments (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     exam_id uuid NOT NULL REFERENCES exams(id) ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -1112,7 +1135,7 @@ The application migration should add cross-table hierarchy checks and JSON optio
 | Keep source references normalized | A question may cite many chunks and a chunk may support many questions | One text source column on question | Requires the junction table and source joins |
 | Keep validation runs as history | FR-MH-10 requires logged validation results and revalidation exists | Overwrite one validation row | Append rows; latest result is selected by timestamp |
 | Preserve exam-question selection | API explicitly requires stable exam snapshots | Re-query questions when exam is read | `exam_questions` is immutable after a submitted attempt |
-| Include extension tables but defer API writes | Requirements include assignments, badges, coaching, and approval; API/runbook defer them | Omit required future entities | Extension migrations must be tested but are not part of MVP flows |
+| Implement roster and assignment writes; defer other extension APIs | Assignments support teacher-led assessments; badges, coaching, and approval remain future work | Enable unrestricted global student selection | Assignment authorization requires exam ownership and roster membership |
 | Use `approved` as a reserved question state | Requirement/architecture describe teacher approval, while current API exposes validated/rejected states | Treat validated as teacher approval | MVP rejects approved in API; future approval endpoint adds transition |
 | Aggregate topic performance incrementally | Supports fast dashboards and API weak-topic queries | Recalculate all answers per request | Submission transaction must update counters exactly once |
 | No generic audit table | Capstone documents require timestamps and selected workflow provenance, not full audit history | Audit every column change | Keep validation and attempt history; avoid enterprise complexity |

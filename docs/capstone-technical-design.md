@@ -6,7 +6,7 @@ This capstone project implements an AI-powered personalized learning and examina
 
 The design emphasizes a simple, practical MVP that is built using Python and open-source tools. It uses a modular layered architecture so the project remains easy to implement, test, and extend while supporting future growth in curriculum coverage and AI capabilities.
 
-For the current implementation, the MVP boundary is MCQ and numerical questions, deterministic validation, student scoring/analytics, and teacher generation/review. Teacher approval, learning-coach routing, assignments, badges, and written-answer evaluation remain planned extensions.
+For the current implementation, the MVP includes MCQ and numerical questions, deterministic validation, student scoring/analytics, teacher generation and question-bank review, teacher-owned student rosters, exam assignment, and basic assignment-based teacher analytics. Formal teacher approval, learning-coach routing, badges, and written-answer evaluation remain planned extensions.
 
 ---
 
@@ -26,90 +26,54 @@ For the current implementation, the MVP boundary is MCQ and numerical questions,
 - Class 10 Physics and Mathematics
 - Chapter and topic structure is discovered from the supplied Physics and Mathematics PDFs during ingestion and persisted as the operational curriculum hierarchy; sample seed rows are development-only and non-authoritative
 - MVP question generation for MCQ and numerical questions
-- Short answer, long answer, competency-based questions, and teacher review are post-MVP extensions
+   - Streamlit student and teacher interfaces
 - Student exam generation and submission
+- Teacher rosters, exam assignment to roster students, and per-exam completion/score summaries
 - Weak-topic detection for the MVP; targeted practice generation is a post-MVP extension
 - PostgreSQL-backed persistence in local development, testing, and production
 - Vector database for retrieval
-- Python-based implementation with open-source tools
-
-### 2.3 Out-of-Scope for MVP
+   - LangChain RAG retrieval and prompt orchestration
+   - LangGraph workflow for question generation and validation
 
 - Other classes or boards
 - Chemistry or other subjects
 - Full mobile app
-- Voice/video learning
-- Production-scale deployment
+5. External Integration Layer
+   - LLM provider and embedding model
 - Complex multi-tenant school systems
 
 ---
-
-## 3. High-Level Design
-
-The system is structured into five major layers:
-
-1. Presentation Layer
-   - Streamlit-based student and teacher interfaces
-
-2. Application Layer
-   - FastAPI backend with service modules
-
-3. AI Layer
-   - LangChain RAG retrieval and prompt orchestration
-- LangGraph workflow orchestration for generation and validation
-- Question generator and validator for the MVP; review and learning-coach workflows are post-MVP
-
-4. Data Layer
-   - PostgreSQL and vector database
-
-5. External Integration Layer
-   - LLM provider and embedding model
-
-```mermaid
-flowchart TD
     U[Users: Student / Teacher]
     FE[Streamlit Frontend]
     API[FastAPI Backend]
-    AUTH[Auth & Role Management]
-    LG[LangGraph Workflow Orchestrator]
-    QG[Question Generator Agent]
-    VAL[Validator Agent]
-    LC[Learning Coach Agent]
-    RAG[LangChain RAG Retrieval]
+    AUTH[Authentication and Authorization]
+    LG[Question Generation Graph]
+    QG[Question Generator]
+    VAL[Question Validator]
+    RAG[Curriculum Retrieval]
     KB[Curriculum Documents]
-    VDB[(Vector DB)]
+    VDB[(FAISS Index)]
     DB[(PostgreSQL)]
-    LLM[LLM API]
-    EMB[Embedding Model]
-    TA[Teacher Approval Checkpoint]
+    LLM[Groq OpenAI-compatible API]
+    EMB[Sentence Transformer]
+    ASG[Teacher Roster and Exam Assignment]
 
     U --> FE
     FE --> API
     API --> AUTH
+    AUTH --> DB
     API --> LG
-    API --> DB
-
+    API --> ASG
+    ASG --> DB
     LG --> QG
-    LG --> VAL
-    LG --> LC
-    LG --> TA
-
     QG --> RAG
-    VAL --> RAG
     RAG --> KB
     RAG --> VDB
     RAG --> LLM
-    QG --> LLM
-    VAL --> LLM
-    LC --> LLM
-
+    QG --> VAL
+    VAL --> DB
     EMB --> VDB
-    KB --> VDB
-    TA --> DB
 ```
-
----
-
 ## 4. Technology Stack
 
 ### 4.1 Core Technologies
@@ -121,10 +85,10 @@ flowchart TD
 | Language | Python 3.11+ | Best fit for AI, backend, and data processing |
 | Agent Framework | LangChain + LangGraph | Best fit for RAG orchestration and agentic workflow state management |
 | Database | PostgreSQL | Robust relational data storage |
-| Vector DB | FAISS or Chroma | Open-source and lightweight for MVP |
-| LLM | OpenAI-compatible API or local open-source model | Easy integration, flexibility |
-| Embeddings | sentence-transformers or OpenAI embeddings | Good quality and open-source options |
-| Document processing | PyMuPDF, pdfplumber, BeautifulSoup | Open-source parsing for PDFs/text |
+| Vector DB | FAISS | Local, rebuildable curriculum index |
+| LLM | Groq OpenAI-compatible API | Current configured provider; provider/model are settings-driven |
+| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) | Local curriculum embeddings |
+| Document processing | pypdf | PDF text extraction for curriculum ingestion |
 | ORM | SQLAlchemy | Clean Python data models and DB integration |
 | Validation | Pydantic | Strong validation and schema control |
 | Logging | Python logging | Standard, simple, effective |
@@ -141,9 +105,8 @@ LangChain is used for:
 LangGraph is used for:
 - question generation workflow
 - validation retry loops
-- teacher approval checkpoints
-- weak-topic recommendation flow
-- personalization cycle
+- Future extension: formal teacher approval checkpoints
+- Future extension: weak-topic recommendations and personalized practice
 
 This is appropriate for the capstone because the system is fundamentally a stateful AI workflow rather than a single prompt call.
 
@@ -153,16 +116,14 @@ Where possible, the design prefers free or open-source solutions:
 
 - Python + FastAPI + Streamlit
 - PostgreSQL
-- FAISS or Chroma
+- FAISS
 - sentence-transformers
-- PyMuPDF / pdfplumber
+- pypdf
 - SQLAlchemy
 - pytest
 - pydantic
 
 When an external vendor LLM API is used, the design should allow swapping with a local open-source LLM or an alternate API provider later.
-
----
 
 ## 5. Functional Modules
 
@@ -205,7 +166,6 @@ Relationships:
 - Each topic belongs to a chapter
 - Each chapter belongs to a subject
 - Each question references a topic and source content
-
 ---
 
 ### 5.3 Question Bank Module
@@ -213,7 +173,8 @@ Relationships:
 Responsibilities:
 - Store generated questions
 - Track metadata such as difficulty, marks, type, Bloom level, and source references
-- Support teacher review and approval
+- Expose generated and validated questions in the teacher question bank
+- Formal teacher approval is a future workflow
 
 Entity fields:
 - question_id
@@ -237,9 +198,8 @@ Entity fields:
 - created_at
 
 Status values:
-- draft
-- pending_review
-- approved
+- generated
+- validated
 - rejected
 
 ---
@@ -260,7 +220,7 @@ Entities:
 
 Key logic:
 - Exam creation uses selected subject, chapter, topic, difficulty, and count
-- Exam questions are selected from approved questions or newly generated questions
+- Exam questions are selected from validated questions or generated and validated to fill missing slots
 - StudentAttempt stores time spent and completion status
 - Feedback and score are computed after submission
 
@@ -292,19 +252,19 @@ Analytics flow:
 
 Responsibilities:
 - Generate question sets based on teacher selection
-- Review AI-generated questions
-- Approve or reject questions
-- Create and assign examinations
-- View student progress
+- View generated and validated questions in the question bank
+- Manage a roster of registered students
+- Create exams and assign them to roster members
+- View assignment completion and score summaries
+- Formal question approval remains a future workflow
 
 Core actions:
 - generate_question_set()
-- review_question()
-- approve_question()
-- reject_question()
+- view_question_bank()
+- manage_student_roster()
 - create_exam()
 - assign_exam()
-- view_student_performance()
+- view_assignment_analytics()
 
 ---
 
@@ -325,11 +285,10 @@ Student UI:
 
 Teacher UI:
 - Question generation controls
-- Review queue
-- Approve/reject action
 - Question bank management
-- Examination assignment interface
-- Performance dashboard
+- Student roster management
+- Assessment creation and assignment
+- Assignment performance dashboard
 
 #### Implementation Notes
 
@@ -339,76 +298,29 @@ Teacher UI:
 
 ---
 
+
 ### 6.2 API Layer Design
 
-FastAPI will serve as the application backend. It will expose REST endpoints grouped by feature set.
+FastAPI exposes the versioned REST API documented in [capstone-api-design.md](capstone-api-design.md). The teacher assignment workflow uses these routes:
 
-#### Proposed API Groups
+- `GET` and `POST /api/v1/teachers/me/students` to list and manage the authenticated teacher's roster
+- `POST /api/v1/exams/{exam_id}/assignments` to assign a teacher-owned exam to roster members
+- `GET /api/v1/students/me/assignments` to list the authenticated student's assignments
+- `GET /api/v1/teachers/me/dashboard` to view assignment and score summaries for the teacher's own exams
 
-Auth API:
-- POST /auth/login
-- POST /auth/register
-- POST /auth/logout
-
-User API:
-- GET /users/{id}
-- GET /students/{id}/progress
-- GET /teachers/{id}/dashboard
-
-Question API:
-- POST /questions/generate
-- GET /questions/{id}
-- GET /questions/topic/{topic_id}
-- POST /questions/review
-- POST /questions/approve
-- POST /questions/reject
-
-Exam API:
-- POST /exams/generate
-- GET /exams/{id}
-- POST /exams/{id}/submit
-- GET /exams/student/{student_id}
-
-Analytics API:
-- GET /analytics/student/{id}/performance
-- GET /analytics/student/{id}/weak-topics
-- POST /analytics/recommend-practice
-
-#### API Design Principles
-
-- Use JSON request/response schemas
-- Validate with Pydantic models
-- Keep each endpoint focused on a single concern
-- Return consistent response structures
+Request/response schemas, authorization rules, status codes, and the remaining auth, curriculum, question, exam, and analytics routes are maintained in the API design document.
 
 ---
 
 ### 6.3 AI Layer Design
 
-The AI layer is the core of the system and includes three logical agents, coordinated through a LangGraph workflow.
-
 #### 6.3.0 LangGraph Workflow Design
 
-The high-level AI orchestration is managed by LangGraph using state transitions between nodes.
+The implemented question-generation graph retrieves curriculum context, generates questions, validates them, and saves the results. Teacher exam assignment and teacher analytics are service/API workflows, not LangGraph nodes. Teacher approval and personalized coaching remain future extensions.
 
-Core graph states:
-- initialize_request
-- retrieve_curriculum_context
-- generate_questions
-- validate_questions
-- teacher_review
-- approve_questions
-- update_student_performance
-- recommend_targeted_practice
-- finalize_response
+Implemented graph sequence:
 
-Graph decision logic:
-- If validation passes, move to approval or exam generation
-- If validation fails, regenerate question set
-- If teacher rejects questions, send them back for revision
-- If student performs poorly in a topic, trigger recommendation node
-
-This makes the AI flow explicit, traceable, and easier to explain in the demo.
+`retrieve_context -> generate_questions -> validate_questions -> save`
 
 #### 6.3.1 Question Generator Agent
 
@@ -677,27 +589,36 @@ app/
 
 ### 8.1 Question Generation Workflow
 
-1. User selects options
+1. Teacher selects generation parameters
 2. System validates inputs
 3. RAG service retrieves relevant curriculum context
-4. Generator agent creates structured questions
-5. Validator agent checks quality
-6. Questions are stored as draft or pending_review
-7. Teacher reviews and approves them
-8. Approved questions enter the question bank
+4. Generator creates structured questions
+5. Validator checks question quality
+6. Questions and validation results are stored with `validated` or `rejected` status
+7. Validated questions are available in the teacher question bank
 
 ### 8.2 Student Assessment Workflow
 
 1. Student selects exam preferences
-2. System retrieves approved questions
-3. Exam is generated and displayed
-4. Student attempts the exam
-5. System evaluates answers
-6. Score and explanations are shown
-7. Topic performance is updated
-8. Weak-area recommendations are generated
+2. System selects matching validated questions and generates/validates any missing questions
+3. Exam is created and displayed without answer keys
+4. Student attempts and submits the exam
+5. System scores MCQ and numerical answers
+6. Score, explanations, and topic performance are updated
+7. Weak-topic indicators are available in the student's results and analytics
 
-### 8.3 Targeted Practice Workflow
+### 8.3 Teacher Exam Assignment Workflow
+
+1. Teacher adds an existing registered student to their roster by email
+2. Teacher creates an exam and selects one or more roster members
+3. The API verifies the teacher owns the exam and each selected student is on the teacher's roster
+4. Assigned students see the exam in their assigned-exams list and can start or resume it
+5. Submission marks the assignment completed
+6. Teacher analytics summarize assignment progress and submitted scores for the teacher's exams
+
+Formal question approval and learning-coach recommendations are future extensions.
+
+### 8.4 Targeted Practice Workflow
 
 1. System computes weak topics from analytics
 2. Learning Coach recommends next practice topics
@@ -880,7 +801,7 @@ capstone-project/
 │   │   └── retrieval.py
 │   └── main.py
 ├── frontend/
-│   └── streamlit_app.py
+│   └── Home.py
 ├── tests/
 │   ├── test_questions.py
 │   ├── test_exams.py
