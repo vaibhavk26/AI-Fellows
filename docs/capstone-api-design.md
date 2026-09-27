@@ -12,10 +12,11 @@ The MVP supports:
 - Student practice-exam generation, attempt submission, scoring, and explanations
 - Topic-level performance and weak-topic analysis
 - Teacher access to generated questions and a validated question bank
+- Teacher-owned student rosters, assignment of teacher-created exams, and basic per-exam completion and score analytics
 
-The following are designed as post-MVP extensions and are not required by the initial runbook: teacher approval checkpoints, exam assignment, AI grading for written answers, learning-coach recommendations, badges, and advanced class analytics.
+The following remain post-MVP extensions: teacher approval checkpoints, AI grading for written answers, learning-coach recommendations, badges, and advanced class analytics beyond assigned-exam summaries.
 
-This document describes both the implemented MVP contract and planned post-MVP routes. The implemented MVP question types are `mcq` and `numerical`; teacher approval, written-answer evaluation, assignments, and coaching routes remain deferred.
+This document describes both the implemented API contract and planned post-MVP routes. The implemented question types are `mcq` and `numerical`; assignments are limited to students in an explicit teacher roster and teacher-created exams.
 
 ## 2. API Conventions
 
@@ -97,8 +98,10 @@ The MVP does not require refresh tokens. A client logs in again after access-tok
 ### 3.2 Role rules
 
 - `student`: may manage their own attempts, answers, progress, and practice exams.
-- `teacher`: may generate questions, list questions, inspect validation results, and use validated questions when creating exams.
+- `teacher`: may manage their roster of registered students, generate questions, create and assign their own exams to roster members, and view analytics for their own assigned exams.
 - A student cannot read another student's attempt, answers, or progress.
+- A student may read and attempt an exam assigned to them; an unassigned student cannot access it.
+- Teachers cannot assign exams they do not own or assign students outside their roster.
 - Teacher-only routes return `403 Forbidden` for students.
 - Resource ownership is checked in the service layer, not only in the frontend.
 
@@ -464,19 +467,61 @@ Response: `201 Created` with `ExamResponse`. Questions are ordered by `sequence_
 
 Returns an exam and its questions.
 
-Authentication: owner, assigned student, or teacher who created the exam. The response is always answer-key safe for students.
+Authentication: exam owner, assigned student, student with an existing attempt, or the teacher who created the exam. The response is always answer-key safe for students.
 
 Response: `200 OK` with `ExamResponse`.
 
 ### `GET /api/v1/exams`
 
-Lists exams visible to the caller.
+Lists exams created by the authenticated caller.
 
 Authentication: bearer token required.
 
 Filters: `subject_id`, `created_by`, `page`, `page_size`.
 
 Response: `200 OK`, paginated exam summaries.
+
+### Teacher roster and exam assignment
+
+#### `GET /api/v1/teachers/me/students`
+
+Lists students explicitly added to the authenticated teacher's roster. Each student includes `id`, `full_name`, and `email`.
+
+Authentication: teacher role required.
+
+#### `POST /api/v1/teachers/me/students`
+
+Adds an existing registered student to the teacher's roster by email.
+
+Request:
+
+```json
+{"email": "student@example.com"}
+```
+
+Returns `201 Created` for a new roster entry, `200 OK` when the student is already present, and `404 Not Found` when no registered student has that email.
+
+#### `POST /api/v1/exams/{exam_id}/assignments`
+
+Assigns a teacher-owned exam to one or more students in that teacher's roster.
+
+Authentication: teacher role required.
+
+Request:
+
+```json
+{"student_ids": ["student-uuid"]}
+```
+
+`student_ids` must contain 1-100 unique UUIDs, and every student must be in the teacher's roster. Returns `201 Created` when assignments are created, `200 OK` when all requested assignments already exist, `400 Bad Request` for students outside the roster, and `404 Not Found` for an exam the teacher does not own.
+
+#### `GET /api/v1/students/me/assignments`
+
+Lists exams assigned to the authenticated student, including assignment status (`assigned`, `started`, `completed`, or `expired`), title, question count, time limit, and assignment time.
+
+Authentication: student role required.
+
+Starting an assigned exam changes its status to `started`; successful submission changes it to `completed`. Starting an already completed assigned exam returns `409 Conflict`.
 
 ### `POST /api/v1/exams/{exam_id}/attempts`
 
@@ -571,18 +616,17 @@ Response: `200 OK`, paginated attempt summaries.
 
 ### `GET /api/v1/teachers/me/dashboard`
 
-Returns teacher-visible summary counts for generated, validated, and rejected questions and exams created by the teacher.
+Returns counts of the teacher's generated, validated, and rejected questions; exams created; assignment totals, starts, completions and completion rate; average score across submitted assigned attempts; and per-exam assignment and score summaries. The `started` count includes assignments that have started or completed. Exams and attempts are scoped to the authenticated teacher's own exams.
 
 Authentication: teacher role required.
 
-The MVP does not expose aggregate performance across all students unless the teacher has an explicit relationship to those students. Assignment and class analytics are post-MVP.
+These summaries include only students assigned to the teacher's own exams; the API does not expose school-wide or unassigned-student analytics.
 
 ## 9. Post-MVP Extension Contracts
 
-These routes are intentionally excluded from the MVP implementation gate but define stable extension points:
+These routes remain planned extensions and are not part of the current API implementation:
 
 - `POST /api/v1/teacher/exams` creates an exam from approved questions.
-- `POST /api/v1/teacher/exams/{exam_id}/assignments` assigns an exam to one or more students.
 - `GET /api/v1/teacher/students/{student_id}/performance` returns authorized student analytics.
 - `POST /api/v1/students/me/practice-recommendations` invokes the Learning Coach Agent.
 - `GET /api/v1/students/me/badges` returns points and badge progress.

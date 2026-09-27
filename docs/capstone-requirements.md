@@ -1,6 +1,6 @@
 # Capstone Requirements Document
 
-> **MVP boundary:** This requirements document captures the broader product vision. The implemented local MVP, defined by the implementation plan, API design, and runbook, supports MCQ and numerical questions, automatic scoring, validation, student analytics, and teacher generation/review. Short-answer, long-answer, competency questions, teacher approval, assignments, badges, and learning-coach recommendations are deferred extensions.
+> **Current implementation boundary:** This requirements document captures the broader product vision. The local implementation supports MCQ and numerical questions, automatic scoring, validation, student analytics, teacher question generation/review, teacher-owned student rosters, exam assignment to roster members, and basic teacher analytics for assigned exams. Short-answer/long-answer grading, competency questions, teacher approval, badges, and learning-coach recommendations remain deferred.
 
 ## 1. Introduction
 

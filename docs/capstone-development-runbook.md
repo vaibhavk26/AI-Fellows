@@ -13,7 +13,7 @@ These files are the source of truth for API contracts and database design. Do no
 
 ## 0. Current Status
 
-Last updated 2026-09-24.
+Last updated 2026-09-27.
 
 Completed:
 
@@ -52,11 +52,11 @@ Completed:
    - [x] Teacher-only generation endpoint with mocked-provider tests
    - [x] Structured numerical formula/quantity validation with one corrective retry
    - [x] Deterministic safe calculation tests without database or API trace fields
-- [x] **Section 10.4 step 9: Scoring and analytics logic** — 2026-09-11
+- [x] **Section 10.4 step 9: Scoring and analytics logic** — 2026-09-11; teacher assignment analytics extended 2026-09-27
    - [x] Exact-match MCQ scoring and shared numerical parsing with ±5% tolerance
    - [x] Missing-answer handling, idempotent submission, and transactional topic performance
    - [x] Progress, weak-topic, attempt-history, and score-boundary tests
-   - [x] Full backend and frontend validation: 78 tests collected, including 9 Playwright browser tests
+   - [x] Current suite collects 83 tests: 48 unit, 24 integration, and 11 Playwright browser tests
 - [x] **Section 10.5: Streamlit frontend** — 2026-09-24
    - [x] Registration, login, session state, and sign-out
    - [x] Student dashboard, curriculum selection, multi-question MCQ/numerical exams, submission, and results
@@ -64,6 +64,12 @@ Completed:
    - [x] Async curriculum route handlers with cached, lazy parent-child loading in Streamlit
    - [x] Background-thread loading for chained selectors and cached data-driven dashboard views
    - [x] Playwright coverage for authentication, role restrictions, dashboard/results states, empty-bank handling, teacher controls, and exam submission
+- [x] **Teacher roster and assigned-exam workflow** — 2026-09-27
+   - [x] Teacher-managed roster of registered students
+   - [x] Assignment of teacher-owned exams to roster members; students can start and complete assigned exams
+   - [x] Teacher dashboard summaries for assignment counts, completion rate, and submitted scores on teacher-owned exams
+   - [x] Migration `9a4c8d1e2f30_teacher_student_roster.py` adds the `teacher_students` table
+   - [x] API integration and Playwright coverage for assignment and student completion
 
 Not yet done:
 
@@ -224,7 +230,7 @@ capstone/
 │   ├── graph/
 │   └── rag/
 ├── frontend/
-│   ├── streamlit_app.py
+│   ├── Home.py
 │   ├── pages/
 │   └── components/
 ├── tests/
@@ -434,14 +440,14 @@ Current implementation note: retrieval, generation, exam fallback, attempt, scor
 
 ### 10.5 Frontend (frontend lead)
 
-10. **Streamlit pages and frontend flow** — implemented in `frontend/streamlit_app.py`, `frontend/pages/1_Dashboard.py` through `5_Generate.py`, and `frontend/components/`. Depends on steps 1-9 for the endpoints each page calls:
+10. **Streamlit pages and frontend flow** — implemented in `frontend/Home.py`, `frontend/pages/1_Dashboard.py` through `5_Generate.py`, and `frontend/components/`. Depends on steps 1-9 for the endpoints each page calls:
     - `1_Dashboard.py` -> weak-topic / progress summary (step 6)
     - `2_Exam.py` -> attempt an exam (step 5)
     - `3_Results.py` -> attempt results and explanations (step 9)
-    - `4_Teacher.py` -> teacher question bank view (step 4 retrieval)
+   - `4_Teacher.py` -> teacher question bank, roster, exam assignment, and assignment analytics
     - `5_Generate.py` -> trigger question generation (step 4 generation, needs steps 7-8)
-    - Gate: the end-to-end flow `register -> login -> choose topic -> generate exam -> submit answers -> view results` must work.
-    - Run from `capstone/` with `streamlit run frontend/streamlit_app.py --server.port 8501`.
+   - Gate: student practice flow and teacher assignment flow (`teacher login -> select roster student and exam -> assign -> student login -> complete assigned exam`) must work.
+   - Run from `capstone/` with `streamlit run frontend/Home.py --server.port 8501`.
 
 ### 10.6 Tests and Production Readiness (QA lead / DevOps lead)
 
@@ -458,14 +464,14 @@ pytest tests/integration/ -v
 pytest tests/ --cov=app --cov-report=term-missing
 ```
 
-For browser validation, start FastAPI and Streamlit, configure a teacher account that owns a populated validated question bank, install Chromium once, and run:
+For browser validation, start FastAPI and Streamlit, configure a teacher account that owns a populated validated question bank in `.env.local`, install Chromium once, and run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m playwright install chromium
-$env:E2E_TEACHER_EMAIL = "teacher@example.com"
-$env:E2E_TEACHER_PASSWORD = "replace-with-password"
 .\.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -q
 ```
+
+The E2E fixture reads `E2E_TEACHER_EMAIL` and `E2E_TEACHER_PASSWORD` from `.env.local`; process environment variables with the same names override those values. The configured teacher must have at least three validated easy MCQs in one chapter.
 
 Required quality checks:
 
