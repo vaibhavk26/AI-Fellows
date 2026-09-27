@@ -1,13 +1,24 @@
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import requests
+from dotenv import dotenv_values
 from playwright.sync_api import Browser, Page, sync_playwright
 
 
 API_URL = os.getenv("E2E_API_URL", "http://localhost:8000").rstrip("/")
 FRONTEND_URL = os.getenv("E2E_FRONTEND_URL", "http://localhost:8501").rstrip("/")
+LOCAL_ENV_FILE = Path(__file__).resolve().parents[2] / ".env.local"
+
+
+def _teacher_login_credentials(env_file: Path = LOCAL_ENV_FILE) -> tuple[str | None, str | None]:
+    file_values = dotenv_values(env_file)
+    return (
+        os.getenv("E2E_TEACHER_EMAIL") or file_values.get("E2E_TEACHER_EMAIL"),
+        os.getenv("E2E_TEACHER_PASSWORD") or file_values.get("E2E_TEACHER_PASSWORD"),
+    )
 
 
 def _skip_if_unavailable() -> None:
@@ -64,8 +75,7 @@ def student_credentials() -> dict[str, str]:
 
 @pytest.fixture
 def teacher_credentials() -> dict[str, str]:
-    configured_email = os.getenv("E2E_TEACHER_EMAIL")
-    configured_password = os.getenv("E2E_TEACHER_PASSWORD")
+    configured_email, configured_password = _teacher_login_credentials()
     if configured_email and configured_password:
         return {"email": configured_email, "password": configured_password}
     credentials = {
@@ -98,8 +108,7 @@ def empty_teacher_credentials() -> dict[str, str]:
 
 @pytest.fixture
 def populated_bank() -> dict:
-    teacher_email = os.getenv("E2E_TEACHER_EMAIL")
-    teacher_password = os.getenv("E2E_TEACHER_PASSWORD")
+    teacher_email, teacher_password = _teacher_login_credentials()
     if not teacher_email or not teacher_password:
         pytest.skip("Set E2E_TEACHER_EMAIL and E2E_TEACHER_PASSWORD for populated-bank E2E tests")
     login = requests.post(
@@ -145,6 +154,47 @@ def populated_bank() -> dict:
         "chapter_id": first["chapter_id"],
         "chapter_name": chapter["name"],
     }
+
+
+@pytest.fixture
+def assignment_exam(
+    teacher_credentials: dict[str, str],
+    student_credentials: dict[str, str],
+    populated_bank: dict,
+) -> dict:
+    login = requests.post(
+        f"{API_URL}/api/v1/auth/login",
+        json=teacher_credentials,
+        timeout=10,
+    )
+    login.raise_for_status()
+    headers = {"Authorization": f"Bearer {login.json()['data']['access_token']}"}
+    roster_response = requests.post(
+        f"{API_URL}/api/v1/teachers/me/students",
+        headers=headers,
+        json={"email": student_credentials["email"]},
+        timeout=10,
+    )
+    roster_response.raise_for_status()
+    roster = requests.get(f"{API_URL}/api/v1/teachers/me/students", headers=headers, timeout=10)
+    roster.raise_for_status()
+    assert any(student["email"] == student_credentials["email"] for student in roster.json()["data"])
+    response = requests.post(
+        f"{API_URL}/api/v1/exams/generate",
+        headers=headers,
+        json={
+            "title": f"Browser assignment {uuid4().hex[:8]}",
+            "subject_id": populated_bank["subject_id"],
+            "chapter_id": populated_bank["chapter_id"],
+            "difficulty": "easy",
+            "question_types": ["mcq"],
+            "question_count": 1,
+            "time_limit_minutes": 20,
+        },
+        timeout=90,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
 
 
 @pytest.fixture

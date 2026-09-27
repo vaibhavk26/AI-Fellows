@@ -3,7 +3,9 @@ import streamlit as st
 from components.api import (
     ApiError,
     _start_background_load,
+    get,
     get_subjects,
+    get_student_assignments,
     _load_chapters_for_subject,
     _load_topics_for_chapter,
     _background_result,
@@ -44,6 +46,36 @@ if require_auth("student"):
                 st.error(error.message)
     else:
         try:
+            assignments = get_student_assignments()
+            if assignments:
+                st.subheader("Assigned exams")
+                for assignment in assignments:
+                    first, second = st.columns([3, 1])
+                    first.write(assignment["exam_title"])
+                    first.caption(
+                        f"{assignment['question_count']} questions · "
+                        f"{assignment['time_limit_minutes']} minutes · {assignment['status'].title()}"
+                    )
+                    if assignment["status"] == "completed":
+                        second.button(
+                            "Completed",
+                            key=f"assigned_completed_{assignment['id']}",
+                            disabled=True,
+                            use_container_width=True,
+                        )
+                    elif second.button(
+                        "Start" if assignment["status"] == "assigned" else "Resume",
+                        key=f"assigned_start_{assignment['id']}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        exam = get(f"/api/v1/exams/{assignment['exam_id']}")["data"]
+                        started = post(f"/api/v1/exams/{assignment['exam_id']}/attempts")["data"]
+                        st.session_state.active_exam = exam
+                        st.session_state.active_attempt = started
+                        st.rerun()
+                st.divider()
+
             subjects = get_subjects()
             subject_map = options_for(subjects)
             if not subject_map:

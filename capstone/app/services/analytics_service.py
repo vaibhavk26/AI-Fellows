@@ -8,10 +8,73 @@ from app.db.models.attempt import StudentAnswer, StudentAttempt
 from app.db.models.analytics import TopicPerformance
 from app.db.models.curriculum import Chapter, Subject, Topic
 from app.db.models.exam import Exam
+from app.db.models.extensions import ExamAssignment
 from app.db.models.question import Question
 
 
 class AnalyticsService:
+    @staticmethod
+    def teacher_dashboard(db: Session, teacher_id: UUID) -> dict:
+        question_counts = {
+            question_status: db.query(Question).filter(
+                Question.created_by == teacher_id, Question.status == question_status
+            ).count()
+            for question_status in ("generated", "validated", "rejected")
+        }
+        exams = db.query(Exam).filter(Exam.created_by == teacher_id).order_by(Exam.created_at.desc()).all()
+        exam_ids = [exam.id for exam in exams]
+        assignments = db.query(ExamAssignment).filter(ExamAssignment.exam_id.in_(exam_ids)).all() if exam_ids else []
+        submitted_attempts = db.query(StudentAttempt, ExamAssignment.exam_id).join(
+            ExamAssignment,
+            (ExamAssignment.exam_id == StudentAttempt.exam_id)
+            & (ExamAssignment.student_id == StudentAttempt.student_id),
+        ).filter(ExamAssignment.exam_id.in_(exam_ids), StudentAttempt.status == "submitted").all() if exam_ids else []
+
+        assignments_by_exam: dict[UUID, list[ExamAssignment]] = {}
+        for assignment in assignments:
+            assignments_by_exam.setdefault(assignment.exam_id, []).append(assignment)
+        percentages_by_exam: dict[UUID, list[Decimal]] = {}
+        for attempt, exam_id in submitted_attempts:
+            if attempt.percentage is not None:
+                percentages_by_exam.setdefault(exam_id, []).append(Decimal(attempt.percentage))
+
+        def average(values: list[Decimal]) -> Decimal | None:
+            if not values:
+                return None
+            return (sum(values, Decimal("0")) / Decimal(len(values))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        exam_performance = []
+        for exam in exams:
+            exam_assignments = assignments_by_exam.get(exam.id, [])
+            percentages = percentages_by_exam.get(exam.id, [])
+            exam_performance.append({
+                "exam_id": exam.id,
+                "title": exam.title,
+                "assigned": len(exam_assignments),
+                "started": sum(assignment.status in ("started", "completed") for assignment in exam_assignments),
+                "completed": sum(assignment.status == "completed" for assignment in exam_assignments),
+                "average_score_percentage": average(percentages),
+            })
+
+        total_assignments = len(assignments)
+        completed_assignments = sum(assignment.status == "completed" for assignment in assignments)
+        started_assignments = sum(assignment.status in ("started", "completed") for assignment in assignments)
+        overall_average = average([
+            percentage for percentages in percentages_by_exam.values() for percentage in percentages
+        ])
+        return {
+            "questions": question_counts,
+            "exams_created": len(exams),
+            "assignments": {
+                "total": total_assignments,
+                "started": started_assignments,
+                "completed": completed_assignments,
+                "completion_rate": (Decimal(completed_assignments * 100) / Decimal(total_assignments)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if total_assignments else Decimal("0.00"),
+                "average_score_percentage": overall_average,
+            },
+            "exam_performance": exam_performance,
+        }
+
     @staticmethod
     def status_for(percentage: Decimal) -> str:
         if percentage >= Decimal("80"):

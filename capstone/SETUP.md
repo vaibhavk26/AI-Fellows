@@ -109,11 +109,13 @@ Run the complete ingestion process from `capstone/`:
 .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all
 ```
 
-The first run downloads the local `all-MiniLM-L6-v2` embedding model if it is not already cached. The resulting FAISS index and its `curriculum.metadata.json` metadata sidecar are stored in `VECTOR_DB_PATH`. Re-running the same PDF content is idempotent. After chunking or source-PDF changes, use `--rebuild` to replace the PostgreSQL references and rebuild FAISS:
+The first run downloads the local `all-MiniLM-L6-v2` embedding model if it is not already cached. The resulting FAISS index and its `curriculum.metadata.json` metadata sidecar are stored in `VECTOR_DB_PATH`. Re-running the same PDF content is idempotent. To rebuild a stale or damaged FAISS index from unchanged PDFs and their existing PostgreSQL source references, use `--rebuild`:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.ingest_curriculum --all --rebuild
 ```
+
+This rebuild replaces only the FAISS index and metadata; PostgreSQL source-reference IDs and question citations are preserved. It verifies that PDF hashes and chunk locations match persisted records and refuses changed PDF content. Source-content replacement requires a separate reingestion process.
 
 To ingest one PDF explicitly:
 
@@ -207,7 +209,7 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite has 66 tests, including 9 Playwright browser tests. Backend coverage is in `tests/unit/` and `tests/integration/`; browser coverage is in `tests/e2e/test_frontend_browser.py`. Backend tests use mocked LLM responses and do not call Groq or require a live API key.
+The current suite collects 83 tests: 48 unit, 24 integration, and 11 Playwright browser tests. Backend coverage is in `tests/unit/` and `tests/integration/`; browser coverage is in `tests/e2e/test_frontend_browser.py`. Backend tests use mocked LLM responses and do not call Groq or require a live API key.
 
 Run the suite with coverage:
 
@@ -217,17 +219,22 @@ Run the suite with coverage:
 
 ## Frontend browser tests
 
-The Playwright suite exercises authentication, role restrictions, dashboard/results states, teacher question-bank and generation controls, empty-bank handling, MCQ submission, numerical submission, and a three-question student exam flow. Install the browser binary once:
+The Playwright suite exercises authentication, role restrictions, dashboard/results states, teacher question-bank and generation controls, roster-based exam assignment, assigned-student completion, empty-bank handling, MCQ submission, numerical submission, and a three-question student exam flow. Assignment E2E coverage uses the configured teacher account and requires at least three validated easy MCQs in one chapter. Install the browser binary once:
 
 ```powershell
 .\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
-Start FastAPI and Streamlit in separate terminals, then provide a teacher account that owns the populated validated question bank and run:
+Start FastAPI and Streamlit in separate terminals. Add the email and password for a teacher account with at least three validated easy MCQs in one chapter to `.env.local`:
+
+```env
+E2E_TEACHER_EMAIL=teacher@example.com
+E2E_TEACHER_PASSWORD=replace-with-password
+```
+
+The E2E fixtures load these values from `.env.local`; process environment variables with the same names take precedence. Then run:
 
 ```powershell
-$env:E2E_TEACHER_EMAIL = "teacher@example.com"
-$env:E2E_TEACHER_PASSWORD = "replace-with-password"
 .\.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -q
 ```
 
@@ -235,5 +242,5 @@ The browser tests create temporary users. Populated-bank tests use the configure
 
 Numerical generation requires a safe `formula` and `quantities` response. If Groq omits those fields, the service retries once. If the retry is missing, unsafe, or mathematically inconsistent, the question is stored as `rejected`. Calculation details are internal and are not added to the database schema or API response.
 
-Question retrieval, exams, attempts, scoring, analytics, curriculum ingestion/retrieval, and the teacher-only LangGraph question-generation workflow are available. `POST /api/v1/questions/generate` returns `201` on successful generation, validation, and persistence; provider or vector-store failures return `503` without saving a partial batch.
+Question retrieval, exams, attempts, scoring, student analytics, teacher roster management, teacher-owned exam assignment, assignment-based teacher analytics, curriculum ingestion/retrieval, and the teacher-only LangGraph question-generation workflow are available. `POST /api/v1/questions/generate` returns `201` on successful generation, validation, and persistence; provider or vector-store failures return `503` without saving a partial batch.
 

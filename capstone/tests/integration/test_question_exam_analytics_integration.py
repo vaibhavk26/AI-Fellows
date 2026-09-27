@@ -98,7 +98,7 @@ def seeded_data():
         database.commit()
         teacher_token, _ = create_access_token(teacher.id, "teacher")
         student_token, _ = create_access_token(student.id, "student")
-        yield {"subject": subject, "chapter": chapter, "topic": topic, "source_reference": source_reference, "teacher": teacher, "teacher_headers": {"Authorization": f"Bearer {teacher_token}"}, "student_headers": {"Authorization": f"Bearer {student_token}"}}
+        yield {"subject": subject, "chapter": chapter, "topic": topic, "source_reference": source_reference, "teacher": teacher, "student": student, "teacher_headers": {"Authorization": f"Bearer {teacher_token}"}, "student_headers": {"Authorization": f"Bearer {student_token}"}}
     finally:
         database.rollback()
         database.execute(text("TRUNCATE TABLE users, subjects CASCADE"))
@@ -233,3 +233,95 @@ def test_exam_generation_rolls_back_invalid_fallback_questions(seeded_data):
     finally:
         database.rollback()
         database.close()
+
+
+def test_teacher_roster_exam_assignment_and_analytics(seeded_data):
+    teacher_headers = seeded_data["teacher_headers"]
+    student_headers = seeded_data["student_headers"]
+    roster_response = client.post(
+        "/api/v1/teachers/me/students",
+        headers=teacher_headers,
+        json={"email": seeded_data["student"].email},
+    )
+    assert roster_response.status_code == 201
+    student_id = roster_response.json()["data"]["id"]
+    roster = client.get("/api/v1/teachers/me/students", headers=teacher_headers)
+    assert roster.status_code == 200
+    assert [student["id"] for student in roster.json()["data"]] == [student_id]
+
+    exam_response = client.post(
+        "/api/v1/exams/generate",
+        headers=teacher_headers,
+        json={
+            "title": "Reflection assessment",
+            "subject_id": str(seeded_data["subject"].id),
+            "chapter_id": str(seeded_data["chapter"].id),
+            "difficulty": "easy",
+            "question_types": ["mcq"],
+            "question_count": 1,
+            "time_limit_minutes": 20,
+        },
+    )
+    assert exam_response.status_code == 201
+    exam = exam_response.json()["data"]
+    database = TestingSessionLocal()
+    try:
+        outsider = User(
+            email=f"outsider-{uuid4()}@example.com",
+            password_hash=hash_password("Password123!"),
+            full_name="Outside Student",
+            role="student",
+        )
+        database.add(outsider)
+        database.flush()
+        database.add(StudentProfile(user_id=outsider.id))
+        database.commit()
+        outsider_token, _ = create_access_token(outsider.id, "student")
+    finally:
+        database.close()
+    outsider_headers = {"Authorization": f"Bearer {outsider_token}"}
+    assert client.get(f"/api/v1/exams/{exam['id']}", headers=outsider_headers).status_code == 404
+
+    assignment_response = client.post(
+        f"/api/v1/exams/{exam['id']}/assignments",
+        headers=teacher_headers,
+        json={"student_ids": [student_id]},
+    )
+    assert assignment_response.status_code == 201
+    assert assignment_response.json()["data"][0]["status"] == "assigned"
+    assert client.post(
+        f"/api/v1/exams/{exam['id']}/assignments",
+        headers=teacher_headers,
+        json={"student_ids": [str(uuid4())]},
+    ).status_code == 400
+    assert client.post(
+        f"/api/v1/exams/{exam['id']}/assignments",
+        headers=student_headers,
+        json={"student_ids": [student_id]},
+    ).status_code == 403
+    assert client.get("/api/v1/students/me/assignments", headers=student_headers).json()["data"][0]["exam_title"] == "Reflection assessment"
+
+    attempt_response = client.post(f"/api/v1/exams/{exam['id']}/attempts", headers=student_headers)
+    assert attempt_response.status_code == 201
+    attempt_id = attempt_response.json()["data"]["id"]
+    question_id = exam["questions"][0]["question"]["id"]
+    submitted = client.post(
+        f"/api/v1/attempts/{attempt_id}/submit",
+        headers=student_headers,
+        json={"answers": [{"question_id": question_id, "answer": "A"}]},
+    )
+    assert submitted.status_code == 201
+    assignments = client.get("/api/v1/students/me/assignments", headers=student_headers).json()["data"]
+    assert assignments[0]["status"] == "completed"
+    assert client.post(f"/api/v1/exams/{exam['id']}/attempts", headers=student_headers).status_code == 409
+
+    dashboard = client.get("/api/v1/teachers/me/dashboard", headers=teacher_headers).json()["data"]
+    assert dashboard["assignments"] == {
+        "total": 1,
+        "started": 1,
+        "completed": 1,
+        "completion_rate": "100.00",
+        "average_score_percentage": "100.00",
+    }
+    assert dashboard["exam_performance"][0]["title"] == "Reflection assessment"
+    assert dashboard["exam_performance"][0]["average_score_percentage"] == "100.00"

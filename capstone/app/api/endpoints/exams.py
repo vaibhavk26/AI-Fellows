@@ -4,13 +4,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.api.dependencies.auth import get_current_student, get_current_user
+from app.api.dependencies.auth import get_current_student, get_current_teacher, get_current_user
 from app.api.dependencies.database import get_db
 from app.api.schemas.auth import UserResponse
 from app.api.schemas.exam import AttemptSubmissionRequest, ExamGenerationRequest
+from app.api.schemas.teacher import ExamAssignmentRequest
 from app.db.models.attempt import StudentAnswer, StudentAttempt
 from app.db.models.curriculum import Topic
 from app.db.models.exam import Exam
+from app.db.models.extensions import ExamAssignment
 from app.db.models.question import Question
 from app.services.analytics_service import AnalyticsService
 from app.services.exam_service import ExamService
@@ -62,6 +64,36 @@ def list_exams(subject_id: UUID | None = None, created_by: UUID | None = None, p
 	return {"data": [_exam_data(db, exam) for exam in exams], "meta": {"page": page, "page_size": page_size, "total": total, "has_next": page * page_size < total}}
 
 
+@router.get("/students/me/assignments")
+def list_student_assignments(current_user: UserResponse = Depends(get_current_student), db: Session = Depends(get_db)) -> dict:
+	rows = db.query(ExamAssignment, Exam).join(Exam, Exam.id == ExamAssignment.exam_id).filter(
+		ExamAssignment.student_id == current_user.id
+	).order_by(ExamAssignment.assigned_at.desc()).all()
+	return {"data": [{
+		"id": assignment.id,
+		"exam_id": exam.id,
+		"exam_title": exam.title,
+		"question_count": exam.question_count,
+		"time_limit_minutes": exam.time_limit_minutes,
+		"status": assignment.status,
+		"assigned_at": assignment.assigned_at,
+	} for assignment, exam in rows], "meta": None}
+
+
+@router.post("/exams/{exam_id}/assignments", status_code=status.HTTP_201_CREATED)
+def assign_exam(exam_id: UUID, request: ExamAssignmentRequest, response: Response, current_user: UserResponse = Depends(get_current_teacher), db: Session = Depends(get_db)) -> dict:
+	exam = db.query(Exam).filter_by(id=exam_id, created_by=current_user.id).one_or_none()
+	if exam is None:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam was not found")
+	try:
+		assignments, created = ExamService.assign_exam(db, exam, current_user.id, request.student_ids)
+	except ValueError as error:
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error))
+	if not created:
+		response.status_code = status.HTTP_200_OK
+	return {"data": [{"id": assignment.id, "student_id": assignment.student_id, "status": assignment.status, "assigned_at": assignment.assigned_at} for assignment in assignments], "meta": None}
+
+
 @router.get("/exams/{exam_id}")
 def get_exam(exam_id: UUID, current_user: UserResponse = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
 	exam = ExamService.get_exam(db, exam_id, current_user.id, current_user.role)
@@ -75,7 +107,10 @@ def start_attempt(exam_id: UUID, response: Response, current_user: UserResponse 
 	exam = ExamService.get_exam(db, exam_id, current_user.id, current_user.role)
 	if exam is None:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exam was not found")
-	attempt, created = ExamService.start_attempt(db, exam, current_user.id)
+	try:
+		attempt, created = ExamService.start_attempt(db, exam, current_user.id)
+	except ValueError as error:
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error))
 	if not created:
 		response.status_code = status.HTTP_200_OK
 	return {"data": {"id": attempt.id, "exam_id": attempt.exam_id, "status": attempt.status, "started_at": attempt.started_at}, "meta": None}

@@ -102,3 +102,32 @@ def test_faiss_store_supports_five_queries_per_subject(tmp_path: Path):
     for query in ("algebra", "equation", "equations", "solve equation", "math algebra"):
         results = store.search(query, subject_id=mathematics_id)
         assert [result.source_reference_id for result in results] == [mathematics_reference]
+
+
+def test_faiss_store_rebuild_replaces_stale_metadata(tmp_path: Path):
+    document_id = uuid4()
+    stale_subject_id, current_subject_id = uuid4(), uuid4()
+    stale_reference_id, current_reference_id = uuid4(), uuid4()
+    stale_chunk = ExtractedChunk("Algebra uses equations.", 1, "old-chunk", "Algebra", None)
+    current_chunk = ExtractedChunk("Light reflects from a mirror.", 1, "new-chunk", "Light", "Reflection")
+    store = FaissStore(tmp_path, FixedEmbeddingModel())
+
+    store.add(
+        [stale_chunk],
+        [type("Reference", (), {"id": stale_reference_id, "document_id": document_id})()],
+        stale_subject_id,
+        [None],
+        [None],
+    )
+    store.add(
+        [current_chunk],
+        [type("Reference", (), {"id": current_reference_id, "document_id": document_id})()],
+        current_subject_id,
+        [None],
+        [None],
+        replace_existing=True,
+    )
+
+    results = store.search("algebra", limit=5)
+
+    assert [result.source_reference_id for result in results] == [current_reference_id]

@@ -13,6 +13,7 @@ def main() -> None:
     parser.add_argument("--all", action="store_true", help="ingest data/curriculum/physics.pdf and mathematics.pdf")
     parser.add_argument("--pdf", type=Path, help="path to a single curriculum PDF")
     parser.add_argument("--subject", help="subject name for --pdf")
+    parser.add_argument("--rebuild", action="store_true", help="rebuild FAISS from all already-ingested PDFs and source references")
     arguments = parser.parse_args()
     if arguments.all:
         inputs = [(Path("data/curriculum/physics.pdf"), "Physics"), (Path("data/curriculum/mathematics.pdf"), "Mathematics")]
@@ -20,13 +21,19 @@ def main() -> None:
         inputs = [(arguments.pdf, arguments.subject)]
     else:
         parser.error("provide --all or both --pdf and --subject")
+    if arguments.rebuild and not arguments.all:
+        parser.error("--rebuild requires --all")
 
     database = SessionLocal()
     try:
         ingestor = CurriculumIngestor(database, Path(get_settings().vector_db_path))
-        for pdf_path, subject_name in inputs:
-            document = ingestor.ingest(pdf_path, subject_name)
-            print(f"Ingested {subject_name}: {document.id}")
+        if arguments.rebuild:
+            ingestor.rebuild_index(inputs)
+            print("Rebuilt FAISS index from persisted curriculum source references")
+        else:
+            for pdf_path, subject_name in inputs:
+                document = ingestor.ingest(pdf_path, subject_name)
+                print(f"Ingested {subject_name}: {document.id}")
     except Exception:
         database.rollback()
         raise
