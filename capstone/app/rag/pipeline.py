@@ -231,7 +231,7 @@ class FaissStore:
         self.metadata_path = directory / "curriculum.metadata.json"
         self.embedding_model = embedding_model or _embedding_model()
 
-    def add(self, chunks: list[ExtractedChunk], references: list[SourceReference], subject_id: UUID, chapter_ids: list[UUID | None], topic_ids: list[UUID | None]) -> None:
+    def add(self, chunks: list[ExtractedChunk], references: list[SourceReference], subject_id: UUID, chapter_ids: list[UUID | None], topic_ids: list[UUID | None], *, replace_existing: bool = False) -> None:
         if not chunks:
             return
         vectors = np.asarray(self.embedding_model.encode([chunk.text for chunk in chunks]), dtype="float32")
@@ -239,10 +239,18 @@ class FaissStore:
             raise ValueError("embedding model returned invalid vector dimensions")
         faiss.normalize_L2(vectors)
         self.directory.mkdir(parents=True, exist_ok=True)
-        index = faiss.read_index(str(self.index_path)) if self.index_path.exists() else faiss.IndexFlatIP(vectors.shape[1])
+        index = (
+            faiss.IndexFlatIP(vectors.shape[1])
+            if replace_existing or not self.index_path.exists()
+            else faiss.read_index(str(self.index_path))
+        )
         if index.d != vectors.shape[1]:
             raise ValueError("existing FAISS index uses a different embedding dimension")
-        metadata = json.loads(self.metadata_path.read_text(encoding="utf-8")) if self.metadata_path.exists() else []
+        metadata = (
+            []
+            if replace_existing or not self.metadata_path.exists()
+            else json.loads(self.metadata_path.read_text(encoding="utf-8"))
+        )
         index.add(vectors)
         metadata.extend({
             "source_reference_id": str(reference.id), "document_id": str(reference.document_id),
@@ -283,6 +291,70 @@ class CurriculumIngestor:
     def __init__(self, database: Session, vector_directory: Path, embedding_model: EmbeddingModel | None = None):
         self.database = database
         self.store = FaissStore(vector_directory, embedding_model)
+
+    def rebuild_index(self, inputs: list[tuple[Path, str]]) -> None:
+        prepared = []
+        included_document_ids: set[UUID] = set()
+        for pdf_path, subject_name in inputs:
+            pdf_path = pdf_path.resolve()
+            document = self.database.query(CurriculumDocument).filter_by(source_uri=str(pdf_path)).one_or_none()
+            if document is None:
+                raise ValueError(f"{pdf_path} has not been ingested; ingest it before rebuilding the index")
+            if hashlib.sha256(pdf_path.read_bytes()).hexdigest() != document.content_hash:
+                raise ValueError(f"{pdf_path} differs from its ingested content; reingest changed PDFs separately")
+            subject = self.database.query(Subject).filter_by(id=document.subject_id).one()
+            if subject.name.casefold() != subject_name.casefold():
+                raise ValueError(f"{pdf_path} is not registered as {subject_name}")
+
+            chunks = chunk_pages(extract_pdf_pages(pdf_path))
+            references = self.database.query(SourceReference).filter_by(document_id=document.id).all()
+            references_by_location = {(reference.page_number, reference.chunk_id): reference for reference in references}
+            if len(references_by_location) != len(references) or len(chunks) != len(references):
+                raise ValueError(f"{pdf_path} chunks do not match the persisted source references")
+
+            matched_references = []
+            chapter_ids = []
+            topic_ids = []
+            for chunk in chunks:
+                reference = references_by_location.get((chunk.page_number, chunk.chunk_id))
+                if reference is None or reference.excerpt != chunk.text:
+                    raise ValueError(f"{pdf_path} chunk {chunk.chunk_id} does not match its persisted source reference")
+                chapter = self.database.query(Chapter).filter_by(
+                    subject_id=subject.id,
+                    name=chunk.chapter_name,
+                ).one_or_none() if chunk.chapter_name else None
+                topic = self.database.query(Topic).filter_by(
+                    chapter_id=chapter.id,
+                    name=chunk.topic_name,
+                ).one_or_none() if chapter and chunk.topic_name else None
+                if chunk.chapter_name and chapter is None:
+                    raise ValueError(f"{pdf_path} chapter {chunk.chapter_name} is missing from the database")
+                if chunk.topic_name and topic is None:
+                    raise ValueError(f"{pdf_path} topic {chunk.topic_name} is missing from the database")
+                matched_references.append(reference)
+                chapter_ids.append(chapter.id if chapter else None)
+                topic_ids.append(topic.id if topic else None)
+
+            prepared.append((chunks, matched_references, subject.id, chapter_ids, topic_ids))
+            included_document_ids.add(document.id)
+
+        database_document_ids = {
+            document_id for (document_id,) in self.database.query(CurriculumDocument.id).all()
+        }
+        if included_document_ids != database_document_ids:
+            raise ValueError("Rebuild inputs must include every persisted curriculum PDF")
+        if not prepared:
+            raise ValueError("No curriculum PDFs were provided for rebuilding")
+
+        for index, (chunks, references, subject_id, chapter_ids, topic_ids) in enumerate(prepared):
+            self.store.add(
+                chunks,
+                references,
+                subject_id,
+                chapter_ids,
+                topic_ids,
+                replace_existing=index == 0,
+            )
 
     def ingest(self, pdf_path: Path, subject_name: str, pages: list[str] | None = None) -> CurriculumDocument:
         pdf_path = pdf_path.resolve()

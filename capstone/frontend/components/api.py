@@ -84,14 +84,29 @@ def get_student_attempts() -> list[dict]:
     return get("/api/v1/students/me/attempts", params={"status": "submitted", "page_size": 20}).get("data", [])
 
 
+def get_student_assignments() -> list[dict]:
+    return get("/api/v1/students/me/assignments").get("data", [])
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def get_attempt_detail(attempt_id: str) -> dict:
     return get(f"/api/v1/attempts/{attempt_id}")["data"]
 
 
-@st.cache_data(ttl=60, show_spinner=False)
 def get_teacher_dashboard() -> dict:
     return get("/api/v1/teachers/me/dashboard")["data"]
+
+
+def get_teacher_students() -> list[dict]:
+    return get("/api/v1/teachers/me/students").get("data", [])
+
+
+def add_teacher_student(email: str) -> dict:
+    return post("/api/v1/teachers/me/students", json={"email": email})["data"]
+
+
+def get_teacher_exams() -> list[dict]:
+    return get("/api/v1/exams", params={"page_size": 100}).get("data", [])
 
 
 @st.cache_data(ttl=60, show_spinner=False)

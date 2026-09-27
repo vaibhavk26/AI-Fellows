@@ -9,8 +9,6 @@ from app.api.dependencies.auth import get_current_student, get_current_teacher
 from app.api.dependencies.database import get_db
 from app.api.schemas.auth import UserResponse
 from app.db.models.attempt import StudentAttempt
-from app.db.models.exam import Exam
-from app.db.models.question import Question
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/students/me", tags=["analytics"])
@@ -59,5 +57,4 @@ def list_attempts(exam_id: UUID | None = None, attempt_status: str | None = Quer
 
 @teacher_router.get("/dashboard")
 def teacher_dashboard(current_user: UserResponse = Depends(get_current_teacher), db: Session = Depends(get_db)) -> dict:
-	question_counts = {question_status: db.query(Question).filter(Question.created_by == current_user.id, Question.status == question_status).count() for question_status in ("generated", "validated", "rejected")}
-	return {"data": {"questions": question_counts, "exams_created": db.query(Exam).filter(Exam.created_by == current_user.id).count()}, "meta": None}
+	return {"data": AnalyticsService.teacher_dashboard(db, current_user.id), "meta": None}

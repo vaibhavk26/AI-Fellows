@@ -16,7 +16,7 @@ The short sequence is:
 
 ## Current status
 
-The MVP includes authentication, curriculum browsing, question retrieval and teacher-only generation, exams with generation fallback, attempts, scoring, analytics, curriculum ingestion, FAISS retrieval, and Streamlit workflows for students and teachers. Curriculum routes use async FastAPI handlers, while the Streamlit frontend uses cached reads and background loading for chained selectors. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
+The current implementation includes authentication, curriculum browsing, teacher-only question generation and question-bank access, student practice exams, teacher-owned rosters and exam assignments, attempt scoring, student analytics, and teacher assignment/completion/score analytics. Curriculum ingestion and FAISS retrieval support question generation. Curriculum routes use async FastAPI handlers, while the Streamlit frontend uses cached reads and background loading for chained selectors. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
 
 ## Frontend caching note
 

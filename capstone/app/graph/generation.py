@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 import re
 import time
 from decimal import Decimal
@@ -30,6 +31,8 @@ from app.db.models.question import Question, QuestionSourceReference, QuestionVa
 from app.rag.pipeline import FaissStore, RetrievalResult
 from app.services.numerical import parse_numeric_answer
 from app.services.calculation import calculate_formula
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowError(RuntimeError):
@@ -423,5 +426,6 @@ class QuestionGenerationWorkflow:
                 self.database.commit()
         except Exception as exc:
             self.database.rollback()
+            logger.exception("Question generation persistence failed")
             raise WorkflowError("GENERATION_SAVE_FAILED", "Generated questions could not be saved") from exc
         return {**state, "questions": questions}

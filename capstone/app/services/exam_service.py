@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.models.attempt import StudentAnswer, StudentAttempt
 from app.db.models.curriculum import Chapter, Topic
 from app.db.models.exam import Exam, ExamQuestion
+from app.db.models.extensions import ExamAssignment, TeacherStudent
 from app.db.models.question import Question
 from app.graph.generation import QuestionGenerationWorkflow, WorkflowError
 from app.api.schemas.question import QuestionGenerationRequest
@@ -83,15 +84,53 @@ class ExamService:
         if exam is None:
             return None
         has_attempt = db.query(StudentAttempt).filter_by(exam_id=exam_id, student_id=user_id).first() is not None
-        return exam if role == "teacher" or exam.created_by == user_id or has_attempt else None
+        has_assignment = db.query(ExamAssignment).filter_by(exam_id=exam_id, student_id=user_id).first() is not None
+        is_owner = exam.created_by == user_id
+        return exam if is_owner or has_attempt or (role == "student" and has_assignment) else None
+
+    @staticmethod
+    def assign_exam(db: Session, exam: Exam, teacher_id: UUID, student_ids: list[UUID]) -> tuple[list[ExamAssignment], bool]:
+        roster_ids = {
+            student_id
+            for (student_id,) in db.query(TeacherStudent.student_id)
+            .filter(TeacherStudent.teacher_id == teacher_id, TeacherStudent.student_id.in_(student_ids))
+            .all()
+        }
+        if roster_ids != set(student_ids):
+            raise ValueError("Every assigned student must be in your roster")
+
+        assignments = db.query(ExamAssignment).filter(
+            ExamAssignment.exam_id == exam.id,
+            ExamAssignment.student_id.in_(student_ids),
+        ).all()
+        existing = {assignment.student_id for assignment in assignments}
+        created = False
+        for student_id in student_ids:
+            if student_id not in existing:
+                assignment = ExamAssignment(exam_id=exam.id, student_id=student_id, assigned_by=teacher_id)
+                db.add(assignment)
+                assignments.append(assignment)
+                created = True
+        db.commit()
+        for assignment in assignments:
+            db.refresh(assignment)
+        return assignments, created
 
     @staticmethod
     def start_attempt(db: Session, exam: Exam, student_id: UUID) -> tuple[StudentAttempt, bool]:
+        assignment = db.query(ExamAssignment).filter_by(exam_id=exam.id, student_id=student_id).one_or_none()
+        if assignment and assignment.status == "completed":
+            raise ValueError("This assigned exam has already been completed")
         attempt = db.query(StudentAttempt).filter_by(exam_id=exam.id, student_id=student_id, status="in_progress").one_or_none()
         if attempt:
+            if assignment:
+                assignment.status = "started"
+                db.commit()
             return attempt, False
         max_score = sum(question.marks for _, question in ExamService.get_exam_questions(db, exam.id))
         attempt = StudentAttempt(exam_id=exam.id, student_id=student_id, max_score=max_score)
+        if assignment:
+            assignment.status = "started"
         db.add(attempt)
         db.commit()
         db.refresh(attempt)
@@ -143,6 +182,10 @@ class ExamService:
         attempt.submitted_at = now
         attempt.score = total
         attempt.percentage = (total * Decimal("100") / Decimal(attempt.max_score)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        assignment = db.query(ExamAssignment).filter_by(exam_id=exam.id, student_id=attempt.student_id).one_or_none()
+        if assignment:
+            assignment.status = "completed"
+            assignment.completed_at = now
         db.commit()
         db.refresh(attempt)
         return attempt

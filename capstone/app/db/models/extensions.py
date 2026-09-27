@@ -17,6 +17,22 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.db.models.base import Base
 
 
+class TeacherStudent(Base):
+    __tablename__ = "teacher_students"
+
+    teacher_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("teacher_profiles.user_id", onupdate="CASCADE", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    student_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("student_profiles.user_id", onupdate="CASCADE", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+
+
 class ExamAssignment(Base):
     __tablename__ = "exam_assignments"
 
