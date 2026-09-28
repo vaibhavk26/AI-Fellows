@@ -13,10 +13,6 @@ from components.api import (
     post,
     require_auth,
 )
-from components.sidebar import render
-
-
-render()
 st.title("Generate questions")
 
 

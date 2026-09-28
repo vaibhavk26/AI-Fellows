@@ -52,7 +52,7 @@ def apply_dashboard_styles() -> None:
             text-transform: uppercase; margin: 0 0 0.25rem;
         }
         .dashboard-header h1 {
-            color: var(--dashboard-text); font-family: Aptos, "Segoe UI", sans-serif;
+            color: var(--dashboard-text); font-family: inherit;
             font-size: 1.8rem; font-weight: 650; line-height: 1.2; margin: 0;
         }
         .dashboard-student {
@@ -69,7 +69,7 @@ def apply_dashboard_styles() -> None:
         }
         .kpi-label { color: var(--dashboard-text-muted); font-size: 0.82rem; margin-bottom: 0.5rem; }
         .kpi-value {
-            color: var(--dashboard-text); font-family: Aptos, "Segoe UI", sans-serif;
+            color: var(--dashboard-text); font-family: inherit;
             font-size: 1.7rem; font-weight: 650; line-height: 1.1;
         }
         .kpi-note { color: var(--dashboard-text-muted); font-size: 0.76rem; margin-top: 0.45rem; }
@@ -77,7 +77,7 @@ def apply_dashboard_styles() -> None:
         .kpi-note.negative { color: #FF8B82; }
         .dashboard-section { margin: 1.55rem 0 0.45rem; }
         .dashboard-section h2 {
-            color: var(--dashboard-text); font-family: Aptos, "Segoe UI", sans-serif;
+            color: var(--dashboard-text); font-family: inherit;
             font-size: 1.15rem; font-weight: 650; margin: 0;
         }
         .dashboard-section p { color: var(--dashboard-text-muted); font-size: 0.83rem; margin: 0.2rem 0 0.7rem; }
@@ -236,8 +236,8 @@ def render_attempt_trend(attempts: list[dict]) -> None:
         titleColor="#8B949E",
         domainColor="#30363D",
         tickColor="#30363D",
-        labelFont="Aptos",
-        titleFont="Aptos",
+        labelFont="sans-serif",
+        titleFont="sans-serif",
     )
     st.altair_chart(chart, use_container_width=True)
 

@@ -80,8 +80,12 @@ def _load_topics_for_chapter(chapter_id: str, access_token: str | None = None) -
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_student_attempts() -> list[dict]:
-    return get("/api/v1/students/me/attempts", params={"status": "submitted", "page_size": 20}).get("data", [])
+def get_student_attempts(access_token: str) -> list[dict]:
+    return get(
+        "/api/v1/students/me/attempts",
+        params={"status": "submitted", "page_size": 20},
+        access_token=access_token,
+    ).get("data", [])
 
 
 def get_student_assignments() -> list[dict]:
@@ -89,8 +93,8 @@ def get_student_assignments() -> list[dict]:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_attempt_detail(attempt_id: str) -> dict:
-    return get(f"/api/v1/attempts/{attempt_id}")["data"]
+def get_attempt_detail(attempt_id: str, access_token: str) -> dict:
+    return get(f"/api/v1/attempts/{attempt_id}", access_token=access_token)["data"]
 
 
 def get_teacher_dashboard() -> dict:
@@ -110,8 +114,8 @@ def get_teacher_exams() -> list[dict]:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def get_teacher_questions() -> list[dict]:
-    return get("/api/v1/questions", params={"page_size": 100}).get("data", [])
+def get_teacher_questions(access_token: str) -> list[dict]:
+    return get("/api/v1/questions", params={"page_size": 100}, access_token=access_token).get("data", [])
 
 
 @st.cache_data(ttl=60, show_spinner=False)
