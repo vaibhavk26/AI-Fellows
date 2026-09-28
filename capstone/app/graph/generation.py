@@ -198,16 +198,41 @@ class QuestionGenerationWorkflow:
             )
             generated = parse_generation_response(response)
             generated = [self._normalize_generated_item(item) for item in generated]
-            if request.question_type == "mcq" and any(
-                not self._has_valid_mcq_options(item) for item in generated
-            ):
-                retry_response = self._invoke_with_rate_limit_retry(
-                    model, build_mcq_retry_prompt(request, context, generated)
-                )
-                generated = [
-                    self._normalize_generated_item(item)
-                    for item in parse_generation_response(retry_response)
-                ]
+            if request.question_type == "mcq":
+                # Grounding repair is another model generation and may damage fields that
+                # were already repaired. Recheck the complete MCQ contract after each pass.
+                for _ in range(2):
+                    if not all(self._has_valid_mcq_payload(item) for item in generated):
+                        retry_response = self._invoke_with_rate_limit_retry(
+                            model, build_mcq_retry_prompt(request, context, generated)
+                        )
+                        generated = [
+                            self._normalize_generated_item(item)
+                            for item in parse_generation_response(retry_response)
+                        ]
+                    elif any(
+                        not self._is_curriculum_relevant(item, state.get("context", []))
+                        for item in generated
+                    ):
+                        retry_response = self._invoke_with_rate_limit_retry(
+                            model, build_grounding_retry_prompt(request, context, generated)
+                        )
+                        generated = [
+                            self._normalize_generated_item(item)
+                            for item in parse_generation_response(retry_response)
+                        ]
+                    else:
+                        break
+                # A grounding retry is the final operation in the second pass, so it can
+                # still invalidate the MCQ shape. End on a structure repair when needed.
+                if not all(self._has_valid_mcq_payload(item) for item in generated):
+                    retry_response = self._invoke_with_rate_limit_retry(
+                        model, build_mcq_retry_prompt(request, context, generated)
+                    )
+                    generated = [
+                        self._normalize_generated_item(item)
+                        for item in parse_generation_response(retry_response)
+                    ]
             if state["request"].question_type == "numerical" and any(
                 not self._has_valid_numerical_calculation(item) for item in generated
             ):
@@ -216,7 +241,9 @@ class QuestionGenerationWorkflow:
                 )
                 generated = parse_generation_response(retry_response)
             generated = [self._normalize_generated_item(item) for item in generated]
-            if any(not self._is_curriculum_relevant(item, state.get("context", [])) for item in generated):
+            if request.question_type != "mcq" and any(
+                not self._is_curriculum_relevant(item, state.get("context", [])) for item in generated
+            ):
                 retry_response = self._invoke_with_rate_limit_retry(
                     model, build_grounding_retry_prompt(state["request"], context, generated)
                 )
@@ -291,6 +318,16 @@ class QuestionGenerationWorkflow:
             and all(texts)
             and correct_answer in keys
             and expected_answer == correct_answer
+        )
+
+    @classmethod
+    def _has_valid_mcq_payload(cls, item: GeneratedQuestion) -> bool:
+        return (
+            cls._has_valid_mcq_options(item)
+            and bool(str(item.get("question_text", "")).strip())
+            and bool(str(item.get("explanation", "")).strip())
+            and bool(str(item.get("learning_objective", "")).strip())
+            and str(item.get("question_type", "")).casefold() == "mcq"
         )
 
     @staticmethod

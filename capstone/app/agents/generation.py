@@ -54,22 +54,6 @@ A second example using only supplied quantities, no named constants:
 Before finalizing each numerical question, mentally substitute your own `quantities` into your own
 `formula` and confirm the result equals your stated `correct_answer`; adjust one of them if they disagree."""
 
-_MCQ_WORKED_EXAMPLE = """Use this valid MCQ item as the exact structure to follow:
-{
-    "question_text": "Which quantity is measured in amperes?",
-    "options": [
-        {"key": "A", "text": "Electric current"},
-        {"key": "B", "text": "Voltage"},
-        {"key": "C", "text": "Resistance"},
-        {"key": "D", "text": "Power"}
-    ],
-    "correct_answer": "A", "expected_answer": "A",
-    "explanation": "Electric current is measured in amperes.",
-    "learning_objective": "Identify the unit of electric current.",
-    "difficulty": "easy", "question_type": "mcq"
-}"""
-
-
 def build_generation_prompt(
     request: QuestionGenerationRequest,
     context: str,
@@ -90,6 +74,8 @@ For MCQ: options must be a JSON array of exactly four objects with keys A, B, C,
 not a keyed JSON object. Every option text must be non-empty. `correct_answer` and `expected_answer` must both be
 the same option key (for example, "A"), never a numeric answer or option text.
 The numeric or textual answer belongs in the selected option's `text` field.
+For every question, provide a non-empty explanation and learning_objective. Keep every option,
+answer, explanation, and objective specific to the requested curriculum context.
 For numerical: options must be null, and `correct_answer` and `expected_answer`
 must both contain the same numeric answer, optionally followed by a unit. Also
 return `formula` and a `quantities` object containing every variable and its value
@@ -105,7 +91,6 @@ example `mu0*I/(2*pi*r)`. Write answers in plain decimal or scientific notation
 (for example, `1.24e8 m/s`), never symbols such as `×`, `^`, or `°`. A unit may be a single
 symbol (`N`, `T`, `m`) or a product/quotient of symbols joined with `·` or `/` (for example
 `N·m`, `m/s`).
-{_MCQ_WORKED_EXAMPLE if request.question_type == "mcq" else ""}
 {_NUMERICAL_WORKED_EXAMPLE if request.question_type == "numerical" else ""}
 Return syntactically valid JSON: separate array items with a single comma directly between
 the closing `}}` and the next opening `{{` (`}},{{`), never insert a stray quote character there.
@@ -175,7 +160,8 @@ Each item must contain all of these fields: `question_text`, `options`, `correct
 [{{"key":"A","text":"..."}},{{"key":"B","text":"..."}},{{"key":"C","text":"..."}},{{"key":"D","text":"..."}}]
 Every option text must be a non-empty, meaningful answer choice. `correct_answer` and `expected_answer` must both
 be exactly one of `A`, `B`, `C`, or `D`, and must contain the same key. Use only the curriculum context below.
-The difficulty must be `{request.difficulty}` and the question type must be `mcq`.
+The difficulty must be `{request.difficulty}` and the question type must be `mcq`. Include a non-empty
+`explanation` and `learning_objective` for each item, and keep every field relevant to the supplied context.
 
 PREVIOUS RESPONSE:
 {json.dumps(previous_questions)}
@@ -197,7 +183,9 @@ question(s) as a JSON object with a `questions` array and no markdown.
 Every replacement must use at least two meaningful terms that occur in the curriculum context. Do not
 introduce concepts, facts, formulas, or terminology absent from that context. Preserve these request
 requirements exactly: difficulty `{request.difficulty}`, question_type `{request.question_type}`, and marks `{request.marks}`.
-Keep the full JSON structure required for the question type, including four non-empty MCQ options when applicable.
+Keep the full JSON structure required for the question type. For MCQs, include exactly four non-empty options
+with keys A, B, C, D and matching `correct_answer` and `expected_answer` keys. Every item must include a non-empty
+`question_text`, `explanation`, and `learning_objective`.
 
 PREVIOUS RESPONSE:
 {json.dumps(previous_questions)}
