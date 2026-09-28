@@ -137,7 +137,9 @@ Verify it from a second terminal:
 Invoke-RestMethod -Uri http://localhost:8000/health -Method Get
 ```
 
-Expected output is `status: ok`. Start Streamlit in a third terminal:
+Expected output is `status: ok`. 
+
+Start Streamlit in a third terminal:
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run frontend/Home.py --server.port 8501
