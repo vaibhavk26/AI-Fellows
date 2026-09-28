@@ -13,10 +13,6 @@ from components.dashboard import (
     render_subject_performance,
     render_topic_matrix,
 )
-from components.sidebar import render
-
-
-render()
 if require_auth("student"):
     try:
         apply_dashboard_styles()
