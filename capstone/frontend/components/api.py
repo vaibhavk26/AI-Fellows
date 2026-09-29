@@ -10,6 +10,15 @@ import streamlit as st
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
 
 
+def teacher_signup_enabled() -> bool:
+    """Keep the signup UI aligned with the API's teacher-signup policy."""
+    configured_value = os.getenv("ALLOW_TEACHER_SIGNUP")
+    if configured_value is not None:
+        return configured_value.strip().lower() in {"1", "true", "yes", "on"}
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower()
+    return environment not in {"prod", "production"}
+
+
 class ApiError(RuntimeError):
     def __init__(self, status_code: int, message: str):
         super().__init__(message)

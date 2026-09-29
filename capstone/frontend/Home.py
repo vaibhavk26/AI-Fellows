@@ -1,6 +1,6 @@
 import streamlit as st
 
-from components.api import ApiError, post
+from components.api import ApiError, post, teacher_signup_enabled
 from components.navigation import build_navigation
 from components.sidebar import render_account_controls
 
@@ -39,7 +39,7 @@ def sign_up_page() -> None:
         name = st.text_input("Full name")
         email = st.text_input("Email", key="register_email")
         password = st.text_input("Password", type="password", key="register_password")
-        role = st.selectbox("Account type", ["student", "teacher"])
+        role = st.selectbox("Account type", ["student", "teacher"]) if teacher_signup_enabled() else "student"
         class_level = st.number_input("Class level", min_value=10, max_value=10, value=10) if role == "student" else None
         submitted = st.form_submit_button("Register", use_container_width=True)
     if submitted:
