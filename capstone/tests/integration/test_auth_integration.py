@@ -65,8 +65,14 @@ class TestAuthEndpoints:
         assert "created_at" in data
         assert "password_hash" not in data
 
-    def test_register_teacher(self):
-        """Test teacher registration."""
+    def test_register_teacher(self, monkeypatch):
+        """Test teacher registration when explicitly enabled."""
+        monkeypatch.setattr(
+            "app.services.auth_service.get_settings",
+            lambda: get_settings().model_copy(
+                update={"environment": "production", "allow_teacher_signup": True}
+            ),
+        )
         response = client.post(
             "/api/v1/auth/register",
             json={
@@ -82,6 +88,27 @@ class TestAuthEndpoints:
         assert data["email"] == "teacher@example.com"
         assert data["role"] == "teacher"
         assert data["class_level"] is None
+
+    def test_register_teacher_rejected_when_disabled(self, monkeypatch):
+        """The API must reject teacher signup even when called directly."""
+        monkeypatch.setattr(
+            "app.services.auth_service.get_settings",
+            lambda: get_settings().model_copy(
+                update={"environment": "production", "allow_teacher_signup": False}
+            ),
+        )
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "blocked-teacher@example.com",
+                "password": "TeacherPassword123!",
+                "full_name": "Blocked Teacher",
+                "role": "teacher",
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Teacher registration is currently disabled."
 
     def test_register_duplicate_email(self):
         """Test that duplicate email registration fails."""

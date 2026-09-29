@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.auth import AuthTokenResponse, RegisterRequest, UserResponse
+from app.core.config import get_settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.models.user import StudentProfile, TeacherProfile, User
 
@@ -28,6 +29,9 @@ class AuthService:
         Raises:
             ValueError: If email already exists or registration fails
         """
+        if request.role == "teacher" and not get_settings().teacher_signup_enabled:
+            raise ValueError("Teacher registration is currently disabled.")
+
         # Normalize email to lowercase
         email = request.email.lower()
         

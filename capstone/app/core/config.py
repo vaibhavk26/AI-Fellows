@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "capstone"
     environment: str = "development"
     debug: bool = True
+    allow_teacher_signup: bool | None = None
     database_url: str = "postgresql+psycopg2://capstone_user:password@localhost:5432/capstone"
     test_database_url: str = "postgresql+psycopg2://capstone_user:password@localhost:5432/capstone_test"
     vector_db_type: str = "faiss"
@@ -24,6 +25,13 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "your-secret-key-change-in-production"
 
     model_config = SettingsConfigDict(env_file=".env.local", extra="ignore")
+
+    @property
+    def teacher_signup_enabled(self) -> bool:
+        """Allow teacher signup explicitly, or default off in production."""
+        if self.allow_teacher_signup is not None:
+            return self.allow_teacher_signup
+        return self.environment.strip().lower() not in {"prod", "production"}
 
 
 @lru_cache
