@@ -1,0 +1,4 @@
+The student does not have the ability abort an exam and go back to question regeneration. There has to be a cancel button if I do not want to submit the exam.
+In the Results section the formating of the exam outcome needs to be revisited and made more user friendly.
+USer validation message at the time of login is not intuitive for end user. [{'type': 'value_error', 'loc': ['body', 'email'], 'msg': 'value is not a valid email address: An email address must have an @-sign.', 'input': 'TestStudent3', 'ctx': {'reason': 'An email address must have an @-sign.'}}]
+If enough validated questions are not there the error message is not intuitive to end user

@@ -57,7 +57,7 @@ Railway's PostgreSQL service is private by default and provides `DATABASE_URL` f
    python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
    ```
 
-   Railway sets `PORT` for the service. Binding to `0.0.0.0` and using that port lets Railway route traffic correctly. Do not use the local `--reload` option in the deployed command. See [Railway start commands](https://docs.railway.com/deployments/start-command).
+   Bind to `0.0.0.0` and use the API service's `PORT` variable so Railway can route traffic correctly. Define `PORT` explicitly in the API service's Variables, as described below, so the web service can reference the same value. Do not use the local `--reload` option in the deployed command. See [Railway start commands](https://docs.railway.com/deployments/start-command).
 
 6. In **Variables**, set `RAILPACK_PYTHON_VERSION` to `3.11`. This project pins `faiss-cpu==1.7.4`; selecting a compatible runtime avoids Railpack defaulting to a newer Python version for which that older FAISS wheel may be unavailable. Set the same variable on the Streamlit service in Step 6. See [Railpack Python configuration](https://railpack.com/languages/python).
 
@@ -77,6 +77,7 @@ In the API service's **Variables** tab, add these variables. Use Railway's varia
 
 | Variable | Value |
 |---|---|
+| `PORT` | The API's internal listening port. For an existing deployment listening on `8080`, set this to `8080`; the API start command and web service reference this variable rather than duplicating the port. |
 | `DATABASE_URL` | Reference the PostgreSQL service's `DATABASE_URL`, for example `${{Postgres.DATABASE_URL}}`. Use the exact PostgreSQL service name shown in your project. |
 | `JWT_SECRET_KEY` | A newly generated, long, random secret. Do not use the example/default value in the code. |
 | `ENVIRONMENT` | `production` |
@@ -165,7 +166,7 @@ If the build fails, first check that the root directory is `/capstone`, the star
    http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}
    ```
 
-   Use `http` for private service-to-service communication. The Streamlit Python process calls FastAPI using this environment variable; browsers do not call the private API directly.
+   Define `PORT` explicitly in the API service's Variables (see **API variables** above) and ensure it matches the port Uvicorn listens on. The web service can then reference that configured service variable. Use `http` for private service-to-service communication. The Streamlit Python process calls FastAPI using this environment variable; browsers do not call the private API directly.
 
 7. Add `ENVIRONMENT=production` and set `ALLOW_TEACHER_SIGNUP` to the same value as on the API service. You can create a Railway shared variable and attach it to both services, or enter the same value separately on each service. The form hides the teacher role when this is `false`; FastAPI independently rejects teacher registration. If `ALLOW_TEACHER_SIGNUP` is missing, both services default to disabled in production.
 
@@ -253,7 +254,7 @@ Use test accounts and non-sensitive data during these checks. The `/health` endp
 | Railway reports no start command | Confirm the service's custom start command and `/capstone` root directory. |
 | API healthcheck fails | Confirm the API binds to `0.0.0.0:$PORT`, and healthcheck path is `/health`. |
 | API reports database connection error | Confirm API `DATABASE_URL` references Railway PostgreSQL in the same environment; check migration logs. |
-| Streamlit says API unavailable | Confirm `API_BASE_URL` is exactly `http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}` and both services are running in the same project/environment. |
+| Streamlit says API unavailable or its API URL has a blank port | Confirm the API service has an explicitly defined `PORT` variable, that Uvicorn listens on that port, and that `API_BASE_URL` is `http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`. Confirm both services are running in the same project/environment. |
 | Curriculum retrieval finds no data | Run the ingestion command in the live API container; check its logs and confirm both PDFs are present in the deployed repository. |
 | Curriculum works, then disappears after redeploy | Confirm the API volume mount is `/data/vectors` and `VECTOR_DB_PATH` matches exactly. |
 | Generation returns provider errors | Set a valid `GROQ_API_KEY` on the API service and verify the configured Groq model name. |

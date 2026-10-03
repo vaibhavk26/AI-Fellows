@@ -23,6 +23,32 @@ def _parse_datetime(value: str) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
+def _answer_state_key(attempt_id: str) -> str:
+    return f"exam_answers_{attempt_id}"
+
+
+def _save_answer(attempt_id: str, question_id: str, widget_key: str) -> None:
+    saved_answers = dict(st.session_state.get(_answer_state_key(attempt_id), {}))
+    answer = str(st.session_state.get(widget_key, "") or "").strip()
+    if answer:
+        saved_answers[question_id] = answer
+    else:
+        saved_answers.pop(question_id, None)
+    st.session_state[_answer_state_key(attempt_id)] = saved_answers
+
+
+def _end_active_exam(attempt_id: str) -> None:
+    st.session_state["ended_exam_attempt_id"] = attempt_id
+    st.session_state.pop(_answer_state_key(attempt_id), None)
+    answer_prefix = f"exam_answer_{attempt_id}_"
+    for key in list(st.session_state):
+        if key.startswith(answer_prefix):
+            del st.session_state[key]
+    st.session_state.active_exam = None
+    st.session_state.active_attempt = None
+    st.session_state.pop("exam_question_index", None)
+
+
 @st.fragment(run_every="1s")
 def _render_timer(started_at: str, time_limit_minutes: int) -> None:
     started = _parse_datetime(started_at)
@@ -45,10 +71,9 @@ def _confirm_submission() -> None:
         return
 
     questions = exam.get("questions", [])
-    answer_prefix = f"exam_answer_{attempt['id']}_"
+    saved_answers = st.session_state.get(_answer_state_key(attempt["id"]), {})
     answered_count = sum(
-        bool(str(st.session_state.get(answer_prefix + item["question"]["id"], "") or "").strip())
-        for item in questions
+        bool(str(saved_answers.get(item["question"]["id"], "") or "").strip()) for item in questions
     )
     unanswered = len(questions) - answered_count
     st.write(f"You have answered **{answered_count} of {len(questions)} questions**.")
@@ -60,7 +85,7 @@ def _confirm_submission() -> None:
         answers = []
         for item in questions:
             question_id = item["question"]["id"]
-            answer = str(st.session_state.get(answer_prefix + question_id, "") or "").strip()
+            answer = str(saved_answers.get(question_id, "") or "").strip()
             if answer:
                 answers.append({"question_id": question_id, "answer": answer})
         try:
@@ -68,6 +93,8 @@ def _confirm_submission() -> None:
             get_student_attempts.clear()
             st.session_state.last_result = result
             st.session_state.exam_submission_notice = "Exam submitted. Open Results to review your feedback."
+            st.session_state.pop(_answer_state_key(attempt["id"]), None)
+            answer_prefix = f"exam_answer_{attempt['id']}_"
             for key in list(st.session_state):
                 if key.startswith(answer_prefix):
                     del st.session_state[key]
@@ -81,17 +108,47 @@ def _confirm_submission() -> None:
         st.rerun()
 
 
+@st.dialog("End Exam?")
+def _confirm_end_exam() -> None:
+    ended_attempt_id = st.session_state.get("ended_exam_attempt_id")
+    attempt = st.session_state.get("active_attempt")
+    if ended_attempt_id and (attempt is None or ended_attempt_id == attempt["id"]):
+        st.session_state.pop("ended_exam_attempt_id", None)
+        st.rerun(scope="app")
+    if ended_attempt_id:
+        st.session_state.pop("ended_exam_attempt_id", None)
+    if not attempt:
+        st.info("There is no active exam to end.")
+        return
+
+    st.write("Are you sure you want to end this examination? Your exam will end, and your responses will not be saved")
+    continue_exam, end_exam = st.columns(2)
+    if continue_exam.button("Continue Exam", type="primary", use_container_width=True):
+        st.rerun()
+    end_exam.button(
+        "End Exam",
+        key="confirm_end_exam",
+        use_container_width=True,
+        on_click=_end_active_exam,
+        args=(attempt["id"],),
+    )
+
+
 def _render_active_attempt(exam: dict, attempt: dict) -> None:
     questions = exam.get("questions", [])
     if not questions:
         st.warning("This exam has no questions.")
         return
 
+    st.session_state.setdefault(_answer_state_key(attempt["id"]), {})
     index_key = "exam_question_index"
     current_index = max(0, min(st.session_state.get(index_key, 0), len(questions) - 1))
     st.session_state[index_key] = current_index
     question = questions[current_index]["question"]
     answer_key = f"exam_answer_{attempt['id']}_{question['id']}"
+    saved_answer = st.session_state[_answer_state_key(attempt["id"])].get(question["id"])
+    if saved_answer and answer_key not in st.session_state:
+        st.session_state[answer_key] = saved_answer
 
     header_left, header_right = st.columns([3, 1])
     with header_left:
@@ -103,6 +160,27 @@ def _render_active_attempt(exam: dict, attempt: dict) -> None:
             _render_timer(started_at, exam["time_limit_minutes"])
         else:
             st.metric("Time limit", f"{exam['time_limit_minutes']} min")
+        st.markdown(
+            """
+            <style>
+            .st-key-end_exam_button button,
+            .st-key-confirm_end_exam button {
+                color: #F85149;
+                border-color: #6E3030;
+                background: transparent;
+            }
+            .st-key-end_exam_button button:hover,
+            .st-key-confirm_end_exam button:hover {
+                color: #FF7B72;
+                border-color: #F85149;
+                background: #2D1618;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("End Exam", key="end_exam_button", type="secondary", use_container_width=True):
+            _confirm_end_exam()
 
     st.progress((current_index + 1) / len(questions))
     st.caption(f"Question {current_index + 1} of {len(questions)}")
@@ -120,20 +198,31 @@ def _render_active_attempt(exam: dict, attempt: dict) -> None:
                 format_func=choices.get,
                 index=None,
                 key=answer_key,
+                on_change=_save_answer,
+                args=(attempt["id"], question["id"], answer_key),
             )
         else:
-            st.text_input("Your answer", key=answer_key, placeholder="Enter your answer")
+            st.text_input(
+                "Your answer",
+                key=answer_key,
+                placeholder="Enter your answer",
+                on_change=_save_answer,
+                args=(attempt["id"], question["id"], answer_key),
+            )
 
     previous, spacer, next_question, submit = st.columns([1, 2, 1, 1])
     if previous.button("Previous", disabled=current_index == 0, use_container_width=True):
+        _save_answer(attempt["id"], question["id"], answer_key)
         st.session_state[index_key] = current_index - 1
         st.rerun()
     if next_question.button(
         "Next", disabled=current_index >= len(questions) - 1, type="primary", use_container_width=True
     ):
+        _save_answer(attempt["id"], question["id"], answer_key)
         st.session_state[index_key] = current_index + 1
         st.rerun()
     if submit.button("Submit", use_container_width=True):
+        _save_answer(attempt["id"], question["id"], answer_key)
         _confirm_submission()
 
 

@@ -137,3 +137,110 @@ def test_private_cached_responses_are_partitioned_by_access_token(monkeypatch):
     assert api_client.get_teacher_questions("teacher-a") == [{"owner_token": "teacher-a"}]
     assert api_client.get_teacher_questions("teacher-b") == [{"owner_token": "teacher-b"}]
     assert len(calls) == 6
+
+
+def test_exam_answers_are_preserved_across_question_navigation(monkeypatch):
+    monkeypatch.chdir(FRONTEND_ROOT)
+    monkeypatch.setattr(api_client, "require_auth", lambda role: True)
+    monkeypatch.setattr(api_client, "get_student_assignments", lambda: [])
+    monkeypatch.setattr(api_client, "get_subjects", lambda: [])
+    questions = [
+        {
+            "question": {
+                "id": f"question-{index}",
+                "question_text": f"Question {index}?",
+                "question_type": "mcq",
+                "marks": 1,
+                "options": [{"key": "A", "text": "First"}, {"key": "B", "text": "Second"}],
+            }
+        }
+        for index in range(1, 6)
+    ]
+    app = AppTest.from_file("pages/2_Exam.py")
+    app.session_state["user"] = {"full_name": "Test Student", "role": "student"}
+    app.session_state["active_exam"] = {
+        "id": "exam-1",
+        "title": "Test exam",
+        "time_limit_minutes": 20,
+        "questions": questions,
+    }
+    app.session_state["active_attempt"] = {"id": "attempt-1", "status": "in_progress"}
+    app.run()
+
+    for index in range(len(questions)):
+        app.radio[0].set_value("A").run()
+        assert not app.exception
+        if index < len(questions) - 1:
+            next(button for button in app.button if button.label == "Next").click().run()
+            assert not app.exception
+
+    assert app.session_state["exam_answers_attempt-1"] == {
+        f"question-{index}": "A" for index in range(1, 6)
+    }
+    for index in range(len(questions) - 1, 0, -1):
+        next(button for button in app.button if button.label == "Previous").click().run()
+        assert not app.exception
+        assert app.radio[0].value == "A", f"Question {index} did not retain its selected answer."
+    assert app.radio[0].value == "A"
+    next(button for button in app.button if button.label == "Submit").click().run()
+
+    assert not app.exception
+    assert any("5 of 5 questions" in item.value for item in app.markdown)
+
+
+def test_end_exam_requires_confirmation_and_discards_local_answers(monkeypatch):
+    monkeypatch.chdir(FRONTEND_ROOT)
+    monkeypatch.setattr(api_client, "require_auth", lambda role: True)
+    monkeypatch.setattr(api_client, "get_student_assignments", lambda: [])
+    monkeypatch.setattr(api_client, "get_subjects", lambda: [])
+    api_calls = []
+    monkeypatch.setattr(api_client, "get", lambda *args, **kwargs: api_calls.append(("get", args, kwargs)))
+    monkeypatch.setattr(api_client, "post", lambda *args, **kwargs: api_calls.append(("post", args, kwargs)))
+
+    app = AppTest.from_file("pages/2_Exam.py")
+    app.session_state["user"] = {"full_name": "Test Student", "role": "student"}
+    app.session_state["active_exam"] = {
+        "id": "exam-1",
+        "title": "Test exam",
+        "time_limit_minutes": 20,
+        "questions": [
+            {
+                "question": {
+                    "id": "question-1",
+                    "question_text": "Question 1?",
+                    "question_type": "mcq",
+                    "marks": 1,
+                    "options": [{"key": "A", "text": "First"}, {"key": "B", "text": "Second"}],
+                }
+            }
+        ],
+    }
+    app.session_state["active_attempt"] = {"id": "attempt-1", "status": "in_progress"}
+    app.session_state["exam_answers_attempt-1"] = {"question-1": "A"}
+    app.run()
+
+    next(button for button in app.button if button.label == "End Exam").click().run()
+    assert not app.exception
+    assert app.session_state["active_exam"]["id"] == "exam-1"
+    assert app.session_state["exam_answers_attempt-1"] == {"question-1": "A"}
+    assert any(
+        "Are you sure you want to end this examination? Your exam will end, and your responses will not be saved"
+        in item.value
+        for item in app.markdown
+    )
+    assert [button.label for button in app.button][-2:] == ["Continue Exam", "End Exam"]
+
+    next(button for button in app.button if button.label == "Continue Exam").click().run()
+    assert not app.exception
+    assert app.session_state["active_exam"]["id"] == "exam-1"
+    assert app.session_state["exam_answers_attempt-1"] == {"question-1": "A"}
+
+    next(button for button in app.button if button.label == "End Exam").click().run()
+    next(button for button in reversed(app.button) if button.label == "End Exam").click().run()
+
+    assert not app.exception
+    assert app.session_state["active_exam"] is None
+    assert app.session_state["active_attempt"] is None
+    assert "exam_answers_attempt-1" not in app.session_state
+    assert "exam_answer_attempt-1_question-1" not in app.session_state
+    assert api_calls == []
