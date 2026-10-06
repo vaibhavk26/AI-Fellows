@@ -1,6 +1,6 @@
 # Capstone Project
 
-This folder contains the Capstone MVP: a FastAPI backend, Streamlit frontend, PostgreSQL persistence, FAISS curriculum retrieval, and Groq-backed question generation.
+This folder contains the Capstone MVP: a FastAPI backend, React (Vite + TypeScript + Tailwind) frontend, PostgreSQL persistence, FAISS curriculum retrieval, and Groq-backed question generation.
 
 ## Setup
 
@@ -11,16 +11,16 @@ The short sequence is:
 1. From `capstone/`, create `.venv` and install `requirements.txt`.
 2. Create `.env.local`, PostgreSQL databases, and apply Alembic migrations.
 3. Add readable Physics and Mathematics PDFs and run `python -m scripts.ingest_curriculum --all`.
-4. Start FastAPI on port `8000` and Streamlit on port `8501`.
-5. Open http://localhost:8501 and register a student or teacher account.
+4. Start FastAPI on port `8000`, then run `npm install && npm run dev` in `web/` (port `5173`).
+5. Open http://localhost:5173 and register a student or teacher account.
 
 ## Current status
 
-The current implementation includes authentication, curriculum browsing, teacher-only question generation and question-bank access, student practice exams, teacher-owned rosters and exam assignments, attempt scoring, student analytics, and teacher assignment/completion/score analytics. Curriculum ingestion and FAISS retrieval support question generation. Curriculum routes use async FastAPI handlers, while the Streamlit frontend uses cached reads and background loading for chained selectors. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
+The current implementation includes authentication, curriculum browsing, teacher-only question generation and question-bank access, student practice exams, teacher-owned rosters and exam assignments, attempt scoring, student analytics, and teacher assignment/completion/score analytics. Curriculum ingestion and FAISS retrieval support question generation. Curriculum routes use async FastAPI handlers, while the React frontend loads chained selectors on demand. Teacher generation and generation fallback require a valid `GROQ_API_KEY`; deterministic tests do not.
 
-## Frontend caching note
+## Frontend
 
-The Streamlit frontend follows a cache-first pattern for repeated data fetches. Use `@st.cache_data` for read-heavy API results and reuse cached values across reruns instead of triggering fresh requests for the same subject, chapter, topic, attempts, or dashboard data. When a parent selection changes, load only the dependent child data, and keep parent/child selection state in `st.session_state` so the UI stays responsive and does not refetch the same payloads repeatedly. Chained curriculum loads use a shared `ThreadPoolExecutor` helper; keep the generation and exam forms usable while child data is still loading, and validate the selected child before submitting.
+The UI lives in `web/` (React, Vite, TypeScript, Tailwind) and consumes the FastAPI backend.
 
 For browser tests, install the Playwright browser binary once after installing Python dependencies:
 
@@ -31,7 +31,7 @@ For browser tests, install the Playwright browser binary once after installing P
 ## Project structure
 
 - `app/`: FastAPI backend
-- `frontend/`: Streamlit app
+- `web/`: React app (see [web/README.md](web/README.md))
 - `tests/`: unit and integration tests
 - `data/curriculum/`: Physics and Mathematics curriculum PDFs
 - `scripts/`: ingestion and maintenance utilities; run `python -m scripts.ingest_curriculum --all` after adding PDFs

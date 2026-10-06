@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Plus Jakarta Sans", sans-serif;
+  --color-ink-950: #0b0820;
+  --color-ink-900: #120e2e;
+  --color-ink-800: #1a1442;
+  --color-ink-700: #251d5c;
+  --color-violet-brand: #7c5cff;
+  --color-pink-brand: #ff4fa3;
+  --color-cyan-brand: #22d3ee;
+  --color-lime-brand: #a3ff6b;
+  --color-amber-brand: #ffc247;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-pulse-glow: pulse-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-24px) translateX(14px); }
+}
+@keyframes shimmer {
+  to { background-position: 200% center; }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(124, 92, 255, 0.45); }
+  50% { box-shadow: 0 0 0 10px rgba(124, 92, 255, 0); }
+}
+
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: #ece9ff;
+  background: var(--color-ink-950);
+  -webkit-font-smoothing: antialiased;
+}
+
+.glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 10px 40px -12px rgba(5, 2, 30, 0.7);
+}
+.text-gradient {
+  background: linear-gradient(90deg, #a78bfa, #ff4fa3, #ffc247, #a78bfa);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #7c5cff, #ff4fa3);
+  box-shadow: 0 10px 30px -8px rgba(255, 79, 163, 0.55);
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.1); box-shadow: 0 14px 36px -8px rgba(255, 79, 163, 0.75); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 99px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
