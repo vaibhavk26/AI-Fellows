@@ -82,7 +82,7 @@ export default function TeacherHomePage() {
       {d && (
         <>
           <section>
-            <h2 className="mb-3 font-display text-2xl font-bold">Question bank</h2>
+            <h2 className="mb-3 font-display text-2xl font-bold">Questions you generated</h2>
             <div className="grid gap-4 sm:grid-cols-3">
               <Stat label="Validated" value={d.questions.validated} color="#a3ff6b" />
               <Stat label="Generated" value={d.questions.generated} color="#22d3ee" />
