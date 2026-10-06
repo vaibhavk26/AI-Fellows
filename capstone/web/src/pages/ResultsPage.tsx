@@ -158,14 +158,14 @@ export default function ResultsPage() {
           <section className="glass rounded-3xl p-6">
             <h2 className="mb-3 font-display text-xl font-bold">Coach says</h2>
             <ul className="space-y-2 text-sm text-white/75">
-              <li>? You earned <strong className="text-amber-brand">+{computeXp(total, percentage)} XP</strong> for this quest.</li>
+              <li>⚡ You earned <strong className="text-amber-brand">+{computeXp(total, percentage)} XP</strong> for this quest.</li>
               {prev ? (() => {
                 const d = percentage - num(prev.percentage);
-                return <li>{d > 0 ? "??" : d < 0 ? "??" : "?"} {d === 0 ? "Same score as your previous attempt." : `${Math.abs(d).toFixed(0)} points ${d > 0 ? "higher" : "lower"} than your previous attempt${d > 0 ? " ? keep climbing!" : " ? shake it off and go again."}`}</li>;
-              })() : <li>?? This is your first recorded attempt. Every great streak starts here.</li>}
+                return <li>{d > 0 ? "📈" : d < 0 ? "📉" : "➖"} {d === 0 ? "Same score as your previous attempt." : `${Math.abs(d).toFixed(0)} points ${d > 0 ? "higher" : "lower"} than your previous attempt${d > 0 ? " ? keep climbing!" : " ? shake it off and go again."}`}</li>;
+              })() : <li>🌟 This is your first recorded attempt. Every great streak starts here.</li>}
               {(() => {
-                const weak = topics.filter(([, v]) => v.c < v.t).sort((a, b2) => a[1].c / a[1].t - b2[1].c / b2[1].t)[0];
-                return weak ? <li>?? Focus next on <strong>{weak[0]}</strong> ({weak[1].c}/{weak[1].t} correct). <Link to="/exam" className="font-semibold text-cyan-brand hover:underline">Practise it</Link></li> : <li>?? Every question correct. Try a harder exam!</li>;
+                const weak = topics.filter(([n, v]) => v.c < v.t && n !== "Unknown topic").sort((a, b2) => a[1].c / a[1].t - b2[1].c / b2[1].t)[0];
+                return weak ? <li>🎯 Focus next on <strong>{weak[0]}</strong> ({weak[1].c}/{weak[1].t} correct). <Link to="/exam" className="font-semibold text-cyan-brand hover:underline">Practise it</Link></li> : <li>?? Every question correct. Try a harder exam!</li>;
               })()}
             </ul>
           </section>

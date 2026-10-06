@@ -148,7 +148,7 @@ export default function ExamRunner({ active, answers, index, onAnswers, onIndex,
               )}
             </div>
 
-            <p className="mt-6 hidden text-xs text-white/40 sm:block">Tip: press <kbd className="rounded bg-white/10 px-1.5">A</kbd>?<kbd className="rounded bg-white/10 px-1.5">D</kbd> or <kbd className="rounded bg-white/10 px-1.5">1</kbd>?<kbd className="rounded bg-white/10 px-1.5">4</kbd> to answer, <kbd className="rounded bg-white/10 px-1.5">?</kbd> <kbd className="rounded bg-white/10 px-1.5">?</kbd> to move.</p>
+            <p className="mt-6 hidden text-xs text-white/40 sm:block">Tip: press <kbd className="rounded bg-white/10 px-1.5">A</kbd>–<kbd className="rounded bg-white/10 px-1.5">D</kbd> or <kbd className="rounded bg-white/10 px-1.5">1</kbd>–<kbd className="rounded bg-white/10 px-1.5">4</kbd> to answer, <kbd className="rounded bg-white/10 px-1.5">←</kbd> <kbd className="rounded bg-white/10 px-1.5">→</kbd> to move.</p>
             <div className="mt-8 flex items-center justify-between gap-3">
               <button onClick={() => go(index - 1)} disabled={index === 0} className="flex items-center gap-1 rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:opacity-30"><ChevronLeft className="h-4 w-4" />Previous</button>
               <button onClick={() => setFlagged((s) => { const n = new Set(s); n.has(q.id) ? n.delete(q.id) : n.add(q.id); return n; })} aria-pressed={flagged.has(q.id)} className={`flex items-center gap-1.5 rounded-2xl px-4 py-3 text-sm font-semibold transition ${flagged.has(q.id) ? "bg-amber-brand/20 text-amber-brand" : "text-white/50 hover:text-white"}`}><Flag className="h-4 w-4" />{flagged.has(q.id) ? "Flagged" : "Flag"}</button>

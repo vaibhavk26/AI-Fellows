@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Suspense, lazy } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Component, Suspense, lazy, type ReactNode } from "react";
+import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { Aurora } from "./components/ui";
 import { AuthProvider, useAuth } from "./lib/auth";
@@ -39,8 +39,39 @@ function StudentOnly({ children }: { children: React.ReactNode }) {
   return user?.role === "student" ? <>{children}</> : <Navigate to="/" replace />;
 }
 
+function NotFound() {
+  return (
+    <div className="grid min-h-screen place-items-center p-6 text-center">
+      <div className="glass max-w-md rounded-3xl p-10">
+        <p className="font-display text-6xl font-bold text-gradient">404</p>
+        <h1 className="mt-3 font-display text-2xl font-bold">This page wandered off</h1>
+        <p className="mt-2 text-white/60">The page you are looking for does not exist.</p>
+        <Link to="/" className="btn-primary mt-6 inline-flex rounded-2xl px-6 py-3 font-bold">Back to home</Link>
+      </div>
+    </div>
+  );
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="grid min-h-screen place-items-center p-6 text-center">
+        <div className="glass max-w-md rounded-3xl p-10" role="alert">
+          <h1 className="font-display text-2xl font-bold">Something went wrong</h1>
+          <p className="mt-2 text-white/60">An unexpected error occurred. Reloading usually fixes it.</p>
+          <button onClick={() => window.location.assign("/")} className="btn-primary mt-6 rounded-2xl px-6 py-3 font-bold">Reload</button>
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function App() {
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
@@ -57,11 +88,12 @@ export default function App() {
               <Route path="generate" element={<TeacherOnly><GeneratePage /></TeacherOnly>} />
               <Route path="results" element={<StudentOnly><ResultsPage /></StudentOnly>} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

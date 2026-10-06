@@ -74,7 +74,7 @@ export default function HomePage() {
 
       {levelUp && (
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} role="status" className="glass flex items-center justify-between rounded-3xl border border-amber-brand/40 p-5">
-          <p className="font-display text-xl font-bold">?? Level up! You reached <span className="text-gradient">Level {levelUp}</span></p>
+          <p className="font-display text-xl font-bold">🎉 Level up! You reached <span className="text-gradient">Level {levelUp}</span></p>
           <button onClick={() => setLevelUp(null)} className="text-sm text-white/60 hover:text-white">Dismiss</button>
         </motion.div>
       )}

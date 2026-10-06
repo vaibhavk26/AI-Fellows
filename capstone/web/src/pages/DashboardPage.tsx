@@ -122,7 +122,7 @@ export default function DashboardPage() {
         <h1 className="font-display text-4xl font-bold">Your <span className="text-gradient">progress</span></h1>
       </header>
 
-      {insight && <p className="glass rounded-2xl px-5 py-3 text-sm text-white/80">?? {insight}</p>}
+      {insight && <p className="glass rounded-2xl px-5 py-3 text-sm text-white/80">💡 {insight}</p>}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Subject

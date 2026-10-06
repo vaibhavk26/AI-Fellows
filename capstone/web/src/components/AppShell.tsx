@@ -16,7 +16,7 @@ function XpMini() {
   return (
     <div className="mb-3 rounded-2xl bg-white/5 p-3" aria-label="Your progress">
       <div className="flex items-center justify-between text-xs font-semibold">
-        <span>Level {lvl.level} ? {xp} XP</span>
+        <span>Level {lvl.level} · {xp} XP</span>
         <span className="flex items-center gap-1 text-amber-brand"><Flame className="h-3.5 w-3.5" fill="currentColor" />{streak}</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-brand to-pink-brand" style={{ width: `${Math.round(lvl.progress * 100)}%` }} /></div>
