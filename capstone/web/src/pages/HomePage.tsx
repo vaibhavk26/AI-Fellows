@@ -44,6 +44,20 @@ export default function HomePage() {
     localStorage.setItem(key, String(Math.max(seen, lvl.level)));
   }, [user, analytics.isLoading, lvl.level]);
 
+  const [newBadges, setNewBadges] = useState<string[]>([]);
+  const [welcomed, setWelcomed] = useState(() => !!localStorage.getItem(`examiq.welcome.${user?.id}`));
+  useEffect(() => {
+    if (!user || analytics.isLoading) return;
+    const key = `examiq.badges.${user.id}`;
+    const earned = badges.filter((b) => b.earned).map((b) => b.id);
+    const stored = localStorage.getItem(key);
+    if (stored !== null) {
+      const fresh = badges.filter((b) => b.earned && !stored.split(",").includes(b.id)).map((b) => `${b.emoji} ${b.label}`);
+      if (fresh.length) setNewBadges(fresh);
+    }
+    localStorage.setItem(key, earned.join(","));
+  }, [user, analytics.isLoading, badges.filter((b) => b.earned).length]);
+
   const week = weekActivity(attempts);
   const doneToday = examsToday(attempts);
   const weak = weakestTopic(analytics.data?.topics ?? []);
@@ -63,6 +77,25 @@ export default function HomePage() {
           <p className="font-display text-xl font-bold">?? Level up! You reached <span className="text-gradient">Level {levelUp}</span></p>
           <button onClick={() => setLevelUp(null)} className="text-sm text-white/60 hover:text-white">Dismiss</button>
         </motion.div>
+      )}
+
+      {newBadges.length > 0 && (
+        <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} role="status" className="glass flex items-center justify-between rounded-3xl border border-lime-brand/40 p-5">
+          <p className="font-bold">Badge unlocked: <span className="text-lime-brand">{newBadges.join(", ")}</span></p>
+          <button onClick={() => setNewBadges([])} className="text-sm text-white/60 hover:text-white">Dismiss</button>
+        </motion.div>
+      )}
+
+      {!analytics.isLoading && attempts.length === 0 && !welcomed && (
+        <section className="glass rounded-3xl border border-violet-brand/40 p-6" aria-label="Welcome">
+          <h2 className="font-display text-xl font-bold">Welcome to ExamIQ - here's how it works</h2>
+          <ol className="mt-3 grid gap-3 text-sm text-white/75 sm:grid-cols-3">
+            <li className="rounded-2xl bg-white/5 p-4"><strong>1. Take a quest</strong><br />Start an assigned or practice exam.</li>
+            <li className="rounded-2xl bg-white/5 p-4"><strong>2. Earn XP</strong><br />Accurate answers earn more XP and level you up.</li>
+            <li className="rounded-2xl bg-white/5 p-4"><strong>3. Build a streak</strong><br />Practise daily to unlock badges.</li>
+          </ol>
+          <button onClick={() => { localStorage.setItem(`examiq.welcome.${user?.id}`, "1"); setWelcomed(true); }} className="mt-4 text-sm font-semibold text-cyan-brand hover:underline">Got it</button>
+        </section>
       )}
 
       {analytics.isError && <ErrorNote message={(analytics.error as Error).message} />}
