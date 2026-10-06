@@ -66,6 +66,26 @@ export default function ExamRunner({ active, answers, index, onAnswers, onIndex,
     },
   });
 
+  useEffect(() => {
+    if (dialog || questions.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.metaKey || e.ctrlKey || e.altKey || target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      const cur = Math.min(index, questions.length - 1);
+      const q = questions[cur].question;
+      if (e.key === "ArrowRight") onIndex(Math.min(questions.length - 1, cur + 1));
+      else if (e.key === "ArrowLeft") onIndex(Math.max(0, cur - 1));
+      else if (q.question_type === "mcq") {
+        const opts = q.options ?? [];
+        const byNumber = /^[1-9]$/.test(e.key) ? opts[Number(e.key) - 1] : undefined;
+        const opt = byNumber ?? opts.find((o) => o.key.toLowerCase() === e.key.toLowerCase());
+        if (opt) onAnswers({ ...answers, [q.id]: opt.key });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialog, questions, index, answers, onAnswers, onIndex]);
+
   if (questions.length === 0) {
     return <div className="glass rounded-3xl p-8 text-center text-white/60">This exam has no questions. <button className="underline" onClick={onEnd}>Back</button></div>;
   }
@@ -128,6 +148,7 @@ export default function ExamRunner({ active, answers, index, onAnswers, onIndex,
               )}
             </div>
 
+            <p className="mt-6 hidden text-xs text-white/40 sm:block">Tip: press <kbd className="rounded bg-white/10 px-1.5">A</kbd>?<kbd className="rounded bg-white/10 px-1.5">D</kbd> or <kbd className="rounded bg-white/10 px-1.5">1</kbd>?<kbd className="rounded bg-white/10 px-1.5">4</kbd> to answer, <kbd className="rounded bg-white/10 px-1.5">?</kbd> <kbd className="rounded bg-white/10 px-1.5">?</kbd> to move.</p>
             <div className="mt-8 flex items-center justify-between gap-3">
               <button onClick={() => go(index - 1)} disabled={index === 0} className="flex items-center gap-1 rounded-2xl bg-white/10 px-5 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:opacity-30"><ChevronLeft className="h-4 w-4" />Previous</button>
               <button onClick={() => setFlagged((s) => { const n = new Set(s); n.has(q.id) ? n.delete(q.id) : n.add(q.id); return n; })} aria-pressed={flagged.has(q.id)} className={`flex items-center gap-1.5 rounded-2xl px-4 py-3 text-sm font-semibold transition ${flagged.has(q.id) ? "bg-amber-brand/20 text-amber-brand" : "text-white/50 hover:text-white"}`}><Flag className="h-4 w-4" />{flagged.has(q.id) ? "Flagged" : "Flag"}</button>

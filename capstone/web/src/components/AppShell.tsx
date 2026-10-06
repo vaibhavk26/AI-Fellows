@@ -1,8 +1,28 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { motion } from "framer-motion";
-import { BarChart3, BookOpen, ClipboardList, Home, LogOut, PenSquare, Sparkles, Trophy, Users } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, Flame, BookOpen, ClipboardList, Home, LogOut, PenSquare, Sparkles, Trophy, Users } from "lucide-react";
 import { Aurora, Logo } from "./ui";
 import { useAuth } from "../lib/auth";
+import { api } from "../lib/api";
+import { computeStreak, computeXp, levelFromXp } from "../lib/gamify";
+
+function XpMini() {
+  const { data } = useQuery({ queryKey: ["analytics", {}], queryFn: () => api.analytics({}) });
+  if (!data) return null;
+  const xp = computeXp(Number(data.summary.questions_answered ?? 0), Number(data.summary.score_percentage ?? 0));
+  const lvl = levelFromXp(xp);
+  const streak = computeStreak(data.attempts_detail ?? []);
+  return (
+    <div className="mb-3 rounded-2xl bg-white/5 p-3" aria-label="Your progress">
+      <div className="flex items-center justify-between text-xs font-semibold">
+        <span>Level {lvl.level} ? {xp} XP</span>
+        <span className="flex items-center gap-1 text-amber-brand"><Flame className="h-3.5 w-3.5" fill="currentColor" />{streak}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-brand to-pink-brand" style={{ width: `${Math.round(lvl.progress * 100)}%` }} /></div>
+    </div>
+  );
+}
 
 const STUDENT_NAV = [
   { to: "/", label: "Home", icon: Home, end: true },
@@ -50,6 +70,7 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+        {user?.role !== "teacher" && <XpMini />}
         <div className="rounded-2xl bg-white/5 p-3">
           <div className="flex items-center gap-3">
             <div className="btn-primary grid h-10 w-10 place-items-center rounded-full text-sm font-bold">
