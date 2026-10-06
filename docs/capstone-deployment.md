@@ -42,6 +42,8 @@ Railway's PostgreSQL service is private by default and provides `DATABASE_URL` f
 
 ## 3. Create the FastAPI service
 
+> **Config as code (optional):** the repo includes [`capstone/railway.json`](../capstone/railway.json) and [`capstone/web/railway.json`](../capstone/web/railway.json), which define the start, build, pre-deploy, healthcheck and replica settings below. To use them, set the service's **Settings** → **Config-as-code** path to `/capstone/railway.json` (api) or `/capstone/web/railway.json` (web); the path is absolute from the repo root and does not follow Root Directory. Variables, volumes and domains still need to be set in the Railway UI. Otherwise, enter the settings manually as described below. See [Railway config as code](https://docs.railway.com/config-as-code/reference).
+
 1. From the project canvas, choose **New** → **GitHub Repo** (the wording may appear as “Deploy from GitHub repo”).
 2. Select the repository containing this code. If prompted, choose the branch you want to deploy.
 3. Rename the new service to **api**. Use this exact name for the variable reference later, or adjust the reference to match your chosen name.
@@ -57,7 +59,7 @@ Railway's PostgreSQL service is private by default and provides `DATABASE_URL` f
    python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
    ```
 
-   Bind to `0.0.0.0` and use the API service's `PORT` variable so Railway can route traffic correctly. Define `PORT` explicitly in the API service's Variables, as described below, so the web service can reference the same value. Do not use the local `--reload` option in the deployed command. See [Railway start commands](https://docs.railway.com/deployments/start-command).
+   Bind to `0.0.0.0` and use `$PORT`, which Railway injects automatically, so traffic is routed correctly. You do not need to define `PORT` yourself. Do not use the local `--reload` option in the deployed command. See [Railway start commands](https://docs.railway.com/deployments/start-command).
 
 6. In **Variables**, set `RAILPACK_PYTHON_VERSION` to `3.11`. This project pins `faiss-cpu==1.7.4`; selecting a compatible runtime avoids Railpack defaulting to a newer Python version for which that older FAISS wheel may be unavailable. See [Railpack Python configuration](https://railpack.com/languages/python).
 
@@ -77,7 +79,6 @@ In the API service's **Variables** tab, add these variables. Use Railway's varia
 
 | Variable | Value |
 |---|---|
-| `PORT` | The API's internal listening port. For an existing deployment listening on `8080`, set this to `8080`; the API start command and web service reference this variable rather than duplicating the port. |
 | `DATABASE_URL` | Reference the PostgreSQL service's `DATABASE_URL`, for example `${{Postgres.DATABASE_URL}}`. Use the exact PostgreSQL service name shown in your project. |
 | `JWT_SECRET_KEY` | A newly generated, long, random secret. Do not use the example/default value in the code. |
 | `ENVIRONMENT` | `production` |
@@ -179,7 +180,7 @@ If the build fails, first check that the root directory is `/capstone`, the star
 
 The API service installs `capstone/requirements.txt`. The web service needs neither Python nor Streamlit, and `RAILPACK_PYTHON_VERSION` is needed only on the API service.
 
-Railway private domains use `<service-name>.railway.internal`; reference variables let you construct the API URL without hardcoding its internal host or port. See [Working with Railway domains](https://docs.railway.com/networking/domains/working-with-domains).
+Railway private domains use `<service-name>.railway.internal`; they are not used here because the browser calls the API's public URL. See [Working with Railway domains](https://docs.railway.com/networking/domains/working-with-domains).
 
 ## 7. Ingest the curriculum into production
 
