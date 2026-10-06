@@ -5,6 +5,7 @@ import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Too
 import { ChevronDown, Flame, ListChecks, Percent, TrendingUp } from "lucide-react";
 import { CountUp, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
+import { Link } from "react-router-dom";
 import { BAND_COLOR, BAND_LABEL, band, pct } from "../lib/gamify";
 import type { AttemptDetail, ScoreRow } from "../lib/types";
 
@@ -101,6 +102,12 @@ export default function DashboardPage() {
   const delta = ordered.length >= 2 ? pct(ordered[ordered.length - 1]) - pct(ordered[ordered.length - 2]) : null;
   const chart = ordered.map((a: AttemptDetail, i) => ({ n: i + 1, score: pct(a), exam: a.exam_title || "Exam" }));
 
+  const best = ordered.length ? Math.max(...ordered.map(pct)) : 0;
+  const insight = !count ? null
+    : delta !== null && delta > 0 ? `You're on the rise: +${delta.toFixed(0)} points since your last exam. Your best is ${best.toFixed(0)}%.`
+    : delta !== null && delta < 0 ? `A small dip of ${Math.abs(delta).toFixed(0)} points. Your best is ${best.toFixed(0)}% - you've done it before, go again.`
+    : `Your best score so far is ${best.toFixed(0)}%. Take another exam to see your trend.`;
+
   const kpis = [
     { label: "Overall score", icon: Percent, color: "text-violet-300", value: count ? <CountUp value={overall} decimals={1} suffix="%" /> : "N/A", note: `${summary.score ?? 0} / ${summary.max_score ?? 0} marks` },
     { label: "Exams taken", icon: ListChecks, color: "text-cyan-brand", value: <CountUp value={count} />, note: "Submitted in this view" },
@@ -114,6 +121,8 @@ export default function DashboardPage() {
         <p className="text-sm font-semibold uppercase tracking-widest text-cyan-brand">Learning analytics</p>
         <h1 className="font-display text-4xl font-bold">Your <span className="text-gradient">progress</span></h1>
       </header>
+
+      {insight && <p className="glass rounded-2xl px-5 py-3 text-sm text-white/80">?? {insight}</p>}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Subject
@@ -152,6 +161,7 @@ export default function DashboardPage() {
           <p className="text-5xl">🌱</p>
           <p className="mt-3 font-display text-xl font-bold">Your journey starts here</p>
           <p className="text-white/55">Complete an exam to unlock your analytics.</p>
+          <Link to="/exam" className="btn-primary mt-5 inline-flex rounded-2xl px-6 py-3 font-bold">Take your first exam</Link>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
@@ -6,7 +6,7 @@ import confetti from "canvas-confetti";
 import { Check, Clock, Rocket, Target, X } from "lucide-react";
 import { CountUp, ErrorNote, ProgressRing, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
-import { BAND_COLOR, BAND_LABEL, band } from "../lib/gamify";
+import { BAND_COLOR, BAND_LABEL, band, computeXp } from "../lib/gamify";
 import { formatDuration, parseTimestamp } from "../lib/time";
 import type { AnswerResult, AttemptResult } from "../lib/types";
 
@@ -68,6 +68,10 @@ export default function ResultsPage() {
   const detail = useQuery({ queryKey: ["attempt", selectedId], queryFn: () => api.attemptDetail(selectedId), enabled: !!selectedId });
   const summary = list.find((a) => a.id === selectedId);
   const r: AttemptResult | undefined = detail.data;
+
+  const [onlyMistakes, setOnlyMistakes] = useState(false);
+  const selectedIdx = list.findIndex((a) => a.id === selectedId);
+  const prev = selectedIdx >= 0 ? list[selectedIdx + 1] : undefined;
 
   const percentage = r ? num(r.percentage) : 0;
   const correct = r ? r.answers.filter((a) => a.is_correct).length : 0;
@@ -151,6 +155,21 @@ export default function ResultsPage() {
             <Metric icon={<Clock className="h-4 w-4" />} label="Time taken">{formatDuration(summary?.started_at, summary?.submitted_at ?? r.submitted_at)}</Metric>
           </section>
 
+          <section className="glass rounded-3xl p-6">
+            <h2 className="mb-3 font-display text-xl font-bold">Coach says</h2>
+            <ul className="space-y-2 text-sm text-white/75">
+              <li>? You earned <strong className="text-amber-brand">+{computeXp(total, percentage)} XP</strong> for this quest.</li>
+              {prev ? (() => {
+                const d = percentage - num(prev.percentage);
+                return <li>{d > 0 ? "??" : d < 0 ? "??" : "?"} {d === 0 ? "Same score as your previous attempt." : `${Math.abs(d).toFixed(0)} points ${d > 0 ? "higher" : "lower"} than your previous attempt${d > 0 ? " ? keep climbing!" : " ? shake it off and go again."}`}</li>;
+              })() : <li>?? This is your first recorded attempt. Every great streak starts here.</li>}
+              {(() => {
+                const weak = topics.filter(([, v]) => v.c < v.t).sort((a, b2) => a[1].c / a[1].t - b2[1].c / b2[1].t)[0];
+                return weak ? <li>?? Focus next on <strong>{weak[0]}</strong> ({weak[1].c}/{weak[1].t} correct). <Link to="/exam" className="font-semibold text-cyan-brand hover:underline">Practise it</Link></li> : <li>?? Every question correct. Try a harder exam!</li>;
+              })()}
+            </ul>
+          </section>
+
           {topics.length > 0 && (
             <section className="glass rounded-3xl p-6">
               <h2 className="mb-4 font-display text-xl font-bold">Topic breakdown</h2>
@@ -166,8 +185,15 @@ export default function ResultsPage() {
           )}
 
           <section className="space-y-4">
-            <h2 className="font-display text-2xl font-bold">Question review</h2>
-            {r.answers.map((a, i) => <Review key={a.question_id} a={a} index={i} />)}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-2xl font-bold">Question review</h2>
+              {correct < total && (
+                <button type="button" aria-pressed={onlyMistakes} onClick={() => setOnlyMistakes((v) => !v)} className={`rounded-full border px-4 py-2 text-sm font-semibold ${onlyMistakes ? "border-pink-brand bg-pink-brand/15 text-pink-300" : "border-white/15 text-white/70 hover:bg-white/5"}`}>
+                  {onlyMistakes ? "Showing mistakes only" : "Show mistakes only"}
+                </button>
+              )}
+            </div>
+            {r.answers.map((a, i) => (onlyMistakes && a.is_correct ? null : <Review key={a.question_id} a={a} index={i} />))}
           </section>
         </>
       )}
