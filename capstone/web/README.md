@@ -27,3 +27,6 @@ Backend CORS origins are set with `CORS_ORIGINS` (comma-separated, defaults to t
 ## E2E tests
 
 With the API (:8000) and `npm run dev` (:5173) running: `python -m pytest tests/e2e/test_react_browser.py -m e2e`. Override the URL with `E2E_WEB_URL`. Tests needing a populated bank also need `E2E_TEACHER_EMAIL` / `E2E_TEACHER_PASSWORD`.
+
+## Exam experience
+A 3-2-1 countdown precedes each exam (skipped with reduced motion), and the runner offers a Focus mode (desktop) that hides navigation. A read-only profile page is at `/profile`; the teacher hub shows class insights derived from existing dashboard data.

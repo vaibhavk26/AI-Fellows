@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Flag, Loader2, Send, Timer, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flag, Focus, Loader2, Send, Timer, X } from "lucide-react";
 import { ErrorNote } from "../../components/ui";
 import { api } from "../../lib/api";
 import { formatClock, remainingSeconds } from "../../lib/time";
@@ -39,6 +39,11 @@ export default function ExamRunner({ active, answers, index, onAnswers, onIndex,
   const questions = exam.questions;
   const [now, setNow] = useState(() => Date.now());
   const [dialog, setDialog] = useState<null | "submit" | "end">(null);
+  const [focus, setFocus] = useState(false);
+  useEffect(() => {
+    document.body.classList.toggle("focus-mode", focus);
+    return () => document.body.classList.remove("focus-mode");
+  }, [focus]);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -109,6 +114,7 @@ export default function ExamRunner({ active, answers, index, onAnswers, onIndex,
           <div role="timer" aria-label="Time remaining" className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 font-display text-2xl font-bold tabular-nums ${urgent ? "animate-pulse-glow bg-pink-brand/20 text-pink-300" : "glass"}`}>
             <Timer className="h-5 w-5" />{formatClock(left)}
           </div>
+          <button onClick={() => setFocus((f) => !f)} aria-pressed={focus} title="Hide navigation to concentrate" className={`hidden items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition md:flex ${focus ? "border-cyan-brand bg-cyan-brand/10 text-cyan-brand" : "border-white/15 text-white/70 hover:bg-white/5"}`}><Focus className="h-4 w-4" />{focus ? "Exit focus" : "Focus mode"}</button>
           <button onClick={() => setDialog("end")} className="rounded-2xl border border-pink-brand/40 px-4 py-3 text-sm font-semibold text-pink-300 transition hover:bg-pink-brand/10">End exam</button>
         </div>
       </header>

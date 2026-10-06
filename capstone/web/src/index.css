@@ -68,3 +68,6 @@ body {
 }
 
 :focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+
+body.focus-mode .app-sidebar, body.focus-mode .app-bottom-nav { display: none !important; }
+body.focus-mode main { margin-left: 0 !important; }

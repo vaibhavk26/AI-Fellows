@@ -54,12 +54,19 @@ export default function ExamSetup({ onStart, autoStartId, onAutoStarted }: { onS
   const activeChapter = chapterId && chapters.data?.some((c) => c.id === chapterId) ? chapterId : chapters.data?.[0]?.id ?? "";
   const topics = useQuery({ queryKey: ["topics", activeChapter], queryFn: () => api.topics(activeChapter), enabled: !!activeChapter, staleTime: 300_000 });
 
+  const [ready, setReady] = useState<number | null>(null);
   const begin = useMutation({
     mutationFn: async (job: { kind: "assigned"; assignment: Assignment } | { kind: "practice"; body: GenerateExamRequest }) => {
+      const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!calm) {
+        for (const n of [3, 2, 1]) { setReady(n); await new Promise((r) => setTimeout(r, 800)); }
+      }
+      setReady(null);
       const exam = job.kind === "assigned" ? await api.getExam(job.assignment.exam_id) : await api.generateExam(job.body);
       const attempt = await api.startAttempt(exam.id);
       return { exam, attempt };
     },
+    onError: () => setReady(null),
     onSuccess: (active) => { qc.invalidateQueries({ queryKey: ["assignments"] }); onStart(active); },
   });
 
@@ -179,6 +186,15 @@ export default function ExamSetup({ onStart, autoStartId, onAutoStarted }: { onS
         )}
       </section>
       <p className="text-center text-xs text-white/35">Finished one? <Link className="underline hover:text-white/70" to="/results">Review your results</Link></p>
+      {ready !== null && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-ink-950/90 backdrop-blur-sm" role="status" aria-live="assertive">
+          <div className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-cyan-brand">Get ready</p>
+            <p key={ready} className="font-display text-9xl font-bold text-gradient">{ready}</p>
+            <p className="mt-2 text-white/60">Your timer starts right after.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

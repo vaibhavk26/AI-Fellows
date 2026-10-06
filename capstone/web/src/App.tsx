@@ -13,6 +13,7 @@ const QuestionBankPage = lazy(() => import("./pages/QuestionBankPage"));
 const RosterPage = lazy(() => import("./pages/RosterPage"));
 const TeacherHomePage = lazy(() => import("./pages/TeacherHomePage"));
 const ExamPage = lazy(() => import("./pages/ExamPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const ResultsPage = lazy(() => import("./pages/ResultsPage"));
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: false, refetchOnWindowFocus: false } } });
@@ -86,6 +87,7 @@ export default function App() {
               <Route path="assessments" element={<TeacherOnly><AssessmentsPage /></TeacherOnly>} />
               <Route path="questions" element={<TeacherOnly><QuestionBankPage /></TeacherOnly>} />
               <Route path="generate" element={<TeacherOnly><GeneratePage /></TeacherOnly>} />
+              <Route path="profile" element={<ProfilePage />} />
               <Route path="results" element={<StudentOnly><ResultsPage /></StudentOnly>} />
             </Route>
             <Route path="*" element={<NotFound />} />

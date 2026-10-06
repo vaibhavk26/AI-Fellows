@@ -44,7 +44,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen">
       <Aurora />
-      <aside className="glass fixed inset-y-3 left-3 z-20 hidden w-64 flex-col rounded-3xl p-5 md:flex">
+      <aside className="app-sidebar glass fixed inset-y-3 left-3 z-20 hidden w-64 flex-col rounded-3xl p-5 md:flex">
         <Logo />
         <nav className="mt-10 flex flex-1 flex-col gap-1.5">
           {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -76,10 +76,10 @@ export function AppShell() {
             <div className="btn-primary grid h-10 w-10 place-items-center rounded-full text-sm font-bold">
               {(user?.full_name ?? "?").charAt(0).toUpperCase()}
             </div>
-            <div className="min-w-0 flex-1">
+            <NavLink to="/profile" className="min-w-0 flex-1 rounded-lg" title="View profile">
               <p className="truncate text-sm font-semibold">{user?.full_name}</p>
               <p className="truncate text-xs capitalize text-white/50">{user?.role}</p>
-            </div>
+            </NavLink>
             <button onClick={signOut} aria-label="Sign out" title="Sign out" className="rounded-xl p-2 text-white/60 transition hover:bg-white/10 hover:text-white">
               <LogOut className="h-4 w-4" />
             </button>
@@ -87,7 +87,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <nav className="glass fixed inset-x-3 bottom-3 z-20 flex justify-around rounded-3xl p-2 md:hidden">
+      <nav className="app-bottom-nav glass fixed inset-x-3 bottom-3 z-20 flex justify-around rounded-3xl p-2 md:hidden">
         {NAV.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex flex-col items-center gap-0.5 rounded-2xl px-4 py-2 text-[11px] font-semibold ${isActive ? "btn-primary text-white" : "text-white/60"}`}>
             <Icon className="h-5 w-5" />

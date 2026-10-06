@@ -5,6 +5,7 @@ import { BookOpen, ClipboardList, Sparkles, Users } from "lucide-react";
 import { CountUp, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import type { TeacherDashboard } from "../lib/types";
 
 const avg = (v: number | string | null | undefined) => (v === null || v === undefined ? "N/A" : `${Number(v).toFixed(1)}%`);
 
@@ -23,6 +24,34 @@ const TILES = [
   { to: "/questions", icon: BookOpen, title: "Question bank", text: "Browse and review questions.", color: "from-pink-brand to-amber-brand" },
   { to: "/generate", icon: Sparkles, title: "Generate questions", text: "Fill the bank with AI questions.", color: "from-lime-brand to-cyan-brand" },
 ];
+
+function Insights({ d }: { d: TeacherDashboard }) {
+  const items: { icon: string; text: string }[] = [];
+  const a = d.assignments;
+  if (a.total > 0) {
+    const rate = Math.round((a.completed / a.total) * 100);
+    items.push({ icon: "\u{1F4CA}", text: `${rate}% of assigned exams are completed (${a.completed} of ${a.total}).` });
+    const idle = a.total - a.started;
+    if (idle > 0) items.push({ icon: "\u23F3", text: `${idle} assignment${idle === 1 ? " has" : "s have"} not been started yet - a reminder to students may help.` });
+  }
+  const scored = d.exam_performance.filter((e) => e.average_score_percentage !== null && e.average_score_percentage !== undefined && e.completed > 0);
+  if (scored.length) {
+    const sorted = [...scored].sort((x, y) => Number(x.average_score_percentage) - Number(y.average_score_percentage));
+    const low = sorted[0];
+    if (Number(low.average_score_percentage) < 60) items.push({ icon: "\u{1F6A8}", text: `"${low.title}" averages ${Number(low.average_score_percentage).toFixed(0)}% - students may need revision on this content.` });
+    const top = sorted[sorted.length - 1];
+    if (top !== low) items.push({ icon: "\u{1F31F}", text: `"${top.title}" is your strongest exam at ${Number(top.average_score_percentage).toFixed(0)}% average.` });
+  }
+  if (items.length === 0) return null;
+  return (
+    <section className="glass rounded-3xl p-6" aria-label="Class insights">
+      <h2 className="mb-3 font-display text-xl font-bold">Class insights</h2>
+      <ul className="space-y-2 text-sm text-white/75">
+        {items.map((i) => <li key={i.text} className="rounded-2xl bg-white/5 px-4 py-3">{i.icon} {i.text}</li>)}
+      </ul>
+    </section>
+  );
+}
 
 export default function TeacherHomePage() {
   const { user } = useAuth();
@@ -72,6 +101,7 @@ export default function TeacherHomePage() {
               </div>
             </div>
           </section>
+          <Insights d={d} />
           <section className="glass overflow-x-auto rounded-3xl p-6">
             <h2 className="mb-4 font-display text-xl font-bold">Exam records</h2>
             {d.exam_performance.length === 0 ? <p className="text-sm text-white/55">Exam records will appear here after you assign an assessment.</p> : (
