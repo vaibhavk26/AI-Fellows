@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Loader2, Sparkles } from "lucide-react";
 import { CurriculumPicker, formField, formLabel, type CurriculumValue } from "../components/CurriculumPicker";
-import { ErrorNote } from "../components/ui";
+import { Dropdown, ErrorNote } from "../components/ui";
 import { ApiError, api } from "../lib/api";
 import type { GenerateQuestionsRequest } from "../lib/types";
 
@@ -35,22 +35,16 @@ export default function GeneratePage() {
       <form onSubmit={(e) => { e.preventDefault(); gen.mutate(); }} className="glass grid gap-5 rounded-3xl p-6 sm:p-8 md:grid-cols-2">
         <CurriculumPicker showTopic onChange={setCur} />
         <label className={formLabel}>Question type
-          <select className={formField} value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-            <option value="mcq" className="bg-ink-900">mcq</option><option value="numerical" className="bg-ink-900">numerical</option>
-          </select>
+          <Dropdown className={formField} value={type} onChange={(value) => setType(value as typeof type)} options={[{ value: "mcq", label: "mcq" }, { value: "numerical", label: "numerical" }]} />
         </label>
         <label className={formLabel}>Difficulty
-          <select className={formField} value={difficulty} onChange={(e) => setDifficulty(e.target.value as typeof difficulty)}>
-            {["easy", "medium", "hard"].map((d) => <option key={d} className="bg-ink-900">{d}</option>)}
-          </select>
+          <Dropdown className={formField} value={difficulty} onChange={(value) => setDifficulty(value as typeof difficulty)} options={["easy", "medium", "hard"].map((d) => ({ value: d, label: d }))} />
         </label>
         <label className={formLabel}>Marks
           <input type="number" min={1} max={10} value={marks} onChange={(e) => setMarks(Math.max(1, Math.min(10, Number(e.target.value) || 1)))} className={formField} />
         </label>
         <label className={formLabel}>Learning level
-          <select className={formField} value={bloom} onChange={(e) => setBloom(e.target.value as typeof bloom)}>
-            {["remember", "understand", "apply", "analyze"].map((d) => <option key={d} className="bg-ink-900">{d}</option>)}
-          </select>
+          <Dropdown className={formField} value={bloom} onChange={(value) => setBloom(value as typeof bloom)} options={["remember", "understand", "apply", "analyze"].map((d) => ({ value: d, label: d }))} />
         </label>
         <label className={`${formLabel} md:col-span-2`}>Questions: <span className="text-white">{count}</span>
           <input type="range" min={1} max={10} value={count} onChange={(e) => setCount(Number(e.target.value))} className="mt-3 w-full accent-pink-500" />

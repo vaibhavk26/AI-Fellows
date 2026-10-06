@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { CheckCircle2, Loader2, Rocket, Send } from "lucide-react";
 import { CurriculumPicker, formField, formLabel, type CurriculumValue } from "../components/CurriculumPicker";
-import { ErrorNote } from "../components/ui";
+import { Dropdown, ErrorNote } from "../components/ui";
 import { api } from "../lib/api";
 import type { CreateExamRequest } from "../lib/types";
 
@@ -93,9 +93,12 @@ function AssignTab({ preselect }: { preselect: string }) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); setDone(""); if (picked.length === 0) { setError("Select at least one student."); return; } setError(""); assign.mutate(); }} className="space-y-5">
       <label className={formLabel}>Assessment
-        <select className={formField} value={effectiveExam} onChange={(e) => setExamId(e.target.value)}>
-          {exams.data.map((x) => <option key={x.id} value={x.id} className="bg-ink-900">{x.title} · {x.id.slice(0, 8)}</option>)}
-        </select>
+        <Dropdown
+          className={formField}
+          value={effectiveExam}
+          onChange={setExamId}
+          options={exams.data.map((x) => ({ value: x.id, label: `${x.title} · ${x.id.slice(0, 8)}` }))}
+        />
       </label>
       <div>
         <div className="flex items-center justify-between"><p className={formLabel}>Students ({picked.length} selected)</p>

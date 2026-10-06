@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { CurriculumPicker, formField, formLabel, type CurriculumValue } from "../components/CurriculumPicker";
-import { ErrorNote, Skeleton } from "../components/ui";
+import { Dropdown, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 
 const PAGE = 10;
@@ -31,10 +31,12 @@ export default function QuestionBankPage() {
 
   const select = (label: string, value: string, set: (v: string) => void, all: string, opts: string[]) => (
     <label className={formLabel}>{label}
-      <select className={formField} value={value} onChange={(e) => reset(set)(e.target.value)}>
-        <option value="" className="bg-ink-900">{all}</option>
-        {opts.map((o) => <option key={o} value={o} className="bg-ink-900">{o}</option>)}
-      </select>
+      <Dropdown
+        className={formField}
+        value={value}
+        onChange={(selected) => reset(set)(selected)}
+        options={[{ value: "", label: all }, ...opts.map((option) => ({ value: option, label: option }))]}
+      />
     </label>
   );
 

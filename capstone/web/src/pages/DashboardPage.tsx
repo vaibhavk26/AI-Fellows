@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChevronDown, Flame, ListChecks, Percent, TrendingUp } from "lucide-react";
-import { CountUp, ErrorNote, Skeleton } from "../components/ui";
+import { CountUp, Dropdown, ErrorNote, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { Link } from "react-router-dom";
 import { BAND_COLOR, BAND_LABEL, band, pct } from "../lib/gamify";
@@ -126,21 +126,29 @@ export default function DashboardPage() {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Subject
-          <select className={`${selectCls} mt-1.5 normal-case tracking-normal`} value={subjectId} onChange={(e) => { setSubjectId(e.target.value); setChapterId(""); }}>
-            <option value="" className="bg-ink-900">All subjects</option>
-            {(subjects.data ?? []).map((s) => <option key={s.id} value={s.id} className="bg-ink-900">{s.name}</option>)}
-          </select>
+          <Dropdown
+            className={`${selectCls} mt-1.5 normal-case tracking-normal`}
+            value={subjectId}
+            onChange={(value) => { setSubjectId(value); setChapterId(""); }}
+            options={[{ value: "", label: "All subjects" }, ...(subjects.data ?? []).map((s) => ({ value: s.id, label: s.name }))]}
+          />
         </label>
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Chapter
-          <select className={`${selectCls} mt-1.5 normal-case tracking-normal`} value={chapterId} onChange={(e) => setChapterId(e.target.value)} disabled={!subjectId}>
-            <option value="" className="bg-ink-900">All chapters</option>
-            {(chapters.data ?? []).map((c) => <option key={c.id} value={c.id} className="bg-ink-900">{c.name}</option>)}
-          </select>
+          <Dropdown
+            className={`${selectCls} mt-1.5 normal-case tracking-normal`}
+            value={chapterId}
+            onChange={setChapterId}
+            disabled={!subjectId}
+            options={[{ value: "", label: "All chapters" }, ...(chapters.data ?? []).map((c) => ({ value: c.id, label: c.name }))]}
+          />
         </label>
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Period
-          <select className={`${selectCls} mt-1.5 normal-case tracking-normal`} value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
-            {PERIODS.map((p, i) => <option key={p.label} value={i} className="bg-ink-900">{p.label}</option>)}
-          </select>
+          <Dropdown
+            className={`${selectCls} mt-1.5 normal-case tracking-normal`}
+            value={String(period)}
+            onChange={(value) => setPeriod(Number(value))}
+            options={PERIODS.map((p, i) => ({ value: String(i), label: p.label }))}
+          />
         </label>
       </div>
 

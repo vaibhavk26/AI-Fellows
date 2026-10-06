@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import { Dropdown } from "./ui";
 
 export interface CurriculumValue { subjectId: string; chapterId: string; topicId: string; ready: boolean; noChapters: boolean }
 
@@ -38,24 +39,41 @@ export function CurriculumPicker({ onChange, allSubjects, allChapters, showTopic
   return (
     <>
       <label className={label}>Subject
-        <select className={field} value={subjectId} onChange={(e) => { setSubject(e.target.value); setChapter(""); setTopic(""); }}>
-          {allSubjects && <option value="" className="bg-ink-900">All subjects</option>}
-          {(subjects.data ?? []).map((s) => <option key={s.id} value={s.id} className="bg-ink-900">{s.name}</option>)}
-        </select>
+        <Dropdown
+          className={field}
+          value={subjectId}
+          onChange={(value) => { setSubject(value); setChapter(""); setTopic(""); }}
+          options={[
+            ...(allSubjects ? [{ value: "", label: "All subjects" }] : []),
+            ...(subjects.data ?? []).map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
       </label>
       <label className={label}>Chapter
-        <select className={field} value={chapterId} disabled={!subjectId || !chapters.data?.length} onChange={(e) => { setChapter(e.target.value); setTopic(""); }}>
-          {(allChapters || allSubjects) && <option value="" className="bg-ink-900">All chapters</option>}
-          {(chapters.data ?? []).map((c) => <option key={c.id} value={c.id} className="bg-ink-900">{c.name}</option>)}
-        </select>
+        <Dropdown
+          className={field}
+          value={chapterId}
+          disabled={!subjectId || !chapters.data?.length}
+          onChange={(value) => { setChapter(value); setTopic(""); }}
+          options={[
+            ...((allChapters || allSubjects) ? [{ value: "", label: "All chapters" }] : []),
+            ...(chapters.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
         {noChapters && <span className="mt-1 block text-xs normal-case tracking-normal text-white/45">No chapters are available for the selected subject.</span>}
       </label>
       {showTopic && (
         <label className={label}>Topic
-          <select className={field} value={topicId} disabled={!chapterId} onChange={(e) => setTopic(e.target.value)}>
-            <option value="" className="bg-ink-900">All topics</option>
-            {(topics.data ?? []).map((t) => <option key={t.id} value={t.id} className="bg-ink-900">{t.name}</option>)}
-          </select>
+          <Dropdown
+            className={field}
+            value={topicId}
+            disabled={!chapterId}
+            onChange={setTopic}
+            options={[
+              { value: "", label: "All topics" },
+              ...(topics.data ?? []).map((t) => ({ value: t.id, label: t.name })),
+            ]}
+          />
         </label>
       )}
     </>

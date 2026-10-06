@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Clock, Loader2, Play, Rocket, Zap } from "lucide-react";
-import { ErrorNote, Skeleton } from "../../components/ui";
+import { Dropdown, ErrorNote, Skeleton } from "../../components/ui";
 import { api } from "../../lib/api";
 import type { Assignment, AttemptStart, Exam, GenerateExamRequest } from "../../lib/types";
 
@@ -138,21 +138,31 @@ export default function ExamSetup({ onStart, autoStartId, onAutoStarted }: { onS
         {!noCurriculum && (
           <form onSubmit={generate} className="grid gap-5 md:grid-cols-2">
             <label className={labelCls}>Subject
-              <select className={fieldCls} value={activeSubject} onChange={(e) => { setSubjectId(e.target.value); setChapterId(""); setTopicId(""); }}>
-                {(subjects.data ?? []).map((s) => <option key={s.id} value={s.id} className="bg-ink-900">{s.name}</option>)}
-              </select>
+              <Dropdown
+                className={fieldCls}
+                value={activeSubject}
+                onChange={(value) => { setSubjectId(value); setChapterId(""); setTopicId(""); }}
+                options={(subjects.data ?? []).map((s) => ({ value: s.id, label: s.name }))}
+              />
             </label>
             <label className={labelCls}>Chapter
-              <select className={fieldCls} value={activeChapter} disabled={!chapters.data?.length} onChange={(e) => { setChapterId(e.target.value); setTopicId(""); }}>
-                {(chapters.data ?? []).map((c) => <option key={c.id} value={c.id} className="bg-ink-900">{c.name}</option>)}
-              </select>
+              <Dropdown
+                className={fieldCls}
+                value={activeChapter}
+                disabled={!chapters.data?.length}
+                onChange={(value) => { setChapterId(value); setTopicId(""); }}
+                options={(chapters.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
+              />
               {chapters.isSuccess && chapters.data.length === 0 && <span className="mt-1 block text-xs normal-case tracking-normal text-white/45">No chapters available for this subject.</span>}
             </label>
             <label className={labelCls}>Topic
-              <select className={fieldCls} value={topicId} disabled={!activeChapter} onChange={(e) => setTopicId(e.target.value)}>
-                <option value="" className="bg-ink-900">All topics</option>
-                {(topics.data ?? []).map((t) => <option key={t.id} value={t.id} className="bg-ink-900">{t.name}</option>)}
-              </select>
+              <Dropdown
+                className={fieldCls}
+                value={topicId}
+                disabled={!activeChapter}
+                onChange={setTopicId}
+                options={[{ value: "", label: "All topics" }, ...(topics.data ?? []).map((t) => ({ value: t.id, label: t.name }))]}
+              />
             </label>
             <div>
               <p className={labelCls}>Difficulty</p>

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { Check, Clock, Rocket, Target, X } from "lucide-react";
-import { CountUp, ErrorNote, ProgressRing, Skeleton } from "../components/ui";
+import { CountUp, Dropdown, ErrorNote, ProgressRing, Skeleton } from "../components/ui";
 import { api } from "../lib/api";
 import { BAND_COLOR, BAND_LABEL, band, computeXp } from "../lib/gamify";
 import { formatDuration, parseTimestamp } from "../lib/time";
@@ -121,13 +121,15 @@ export default function ResultsPage() {
           <h1 className="font-display text-4xl font-bold">Quest <span className="text-gradient">report</span></h1>
         </div>
         <label className="text-xs font-semibold uppercase tracking-wider text-white/50">Attempt
-          <select value={selectedId} onChange={(e) => setParams({ attempt: e.target.value })} className="mt-1 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-violet-brand">
-            {list.map((a, i) => (
-              <option key={a.id} value={a.id} className="bg-ink-900">
-                Attempt {list.length - i} · {a.submitted_at ? parseTimestamp(a.submitted_at).toLocaleString() : "—"} · {num(a.percentage).toFixed(1)}%
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            className="mt-1 block w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm normal-case tracking-normal text-white outline-none focus:border-violet-brand"
+            value={selectedId}
+            onChange={(attempt) => setParams({ attempt })}
+            options={list.map((a, i) => ({
+              value: a.id,
+              label: `Attempt ${list.length - i} · ${a.submitted_at ? parseTimestamp(a.submitted_at).toLocaleString() : "—"} · ${num(a.percentage).toFixed(1)}%`,
+            }))}
+          />
         </label>
       </header>
 

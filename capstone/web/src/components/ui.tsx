@@ -1,6 +1,140 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { animate, motion } from "framer-motion";
-import { Zap } from "lucide-react";
+import { ChevronDown, Zap } from "lucide-react";
+
+export interface DropdownOption { value: string; label: string }
+
+export function Dropdown({
+  value,
+  options,
+  onChange,
+  className = "",
+  disabled = false,
+  id,
+  placeholder = "Select an option",
+}: {
+  value: string;
+  options: DropdownOption[];
+  onChange: (value: string) => void;
+  className?: string;
+  disabled?: boolean;
+  id?: string;
+  placeholder?: string;
+}) {
+  const generatedId = useId();
+  const controlId = id ?? generatedId;
+  const listId = `${controlId}-options`;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const [activeIndex, setActiveIndex] = useState(Math.max(selectedIndex, 0));
+  const selectedOption = options[selectedIndex];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex, isOpen]);
+
+  const openAt = (index: number) => {
+    setActiveIndex(Math.max(0, Math.min(index, options.length - 1)));
+    setIsOpen(true);
+  };
+
+  const choose = (index: number) => {
+    const option = options[index];
+    if (option) onChange(option.value);
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      if (!isOpen) openAt(selectedIndex >= 0 ? selectedIndex : 0);
+      else setActiveIndex((index) => Math.min(index + 1, options.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!isOpen) openAt(selectedIndex >= 0 ? selectedIndex : options.length - 1);
+      else setActiveIndex((index) => Math.max(index - 1, 0));
+    } else if (event.key === "Home" && isOpen) {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End" && isOpen) {
+      event.preventDefault();
+      setActiveIndex(options.length - 1);
+    } else if ((event.key === "Enter" || event.key === " ") && isOpen) {
+      event.preventDefault();
+      choose(activeIndex);
+    } else if (event.key === "Escape" && isOpen) {
+      event.preventDefault();
+      setIsOpen(false);
+    } else if (event.key === "Tab") {
+      setIsOpen(false);
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openAt(selectedIndex >= 0 ? selectedIndex : 0);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative w-full">
+      <button
+        id={controlId}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={listId}
+        aria-activedescendant={isOpen && options.length ? `${listId}-${activeIndex}` : undefined}
+        disabled={disabled || options.length === 0}
+        className={`${className} relative text-left pr-11 disabled:cursor-not-allowed`}
+        onClick={() => isOpen ? setIsOpen(false) : openAt(selectedIndex >= 0 ? selectedIndex : 0)}
+        onKeyDown={handleKeyDown}
+      >
+        <span className="block truncate">{selectedOption?.label ?? placeholder}</span>
+        <ChevronDown aria-hidden="true" className={`pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {isOpen && (
+        <div
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-labelledby={controlId}
+          className="absolute left-0 top-full z-50 mt-2 max-h-60 w-full overflow-y-auto rounded-2xl border border-violet-brand/50 bg-ink-900/95 p-1.5 shadow-[0_16px_40px_rgba(5,2,30,0.8)] backdrop-blur-xl"
+        >
+          {options.map((option, index) => {
+            const selected = option.value === value;
+            const active = index === activeIndex;
+            return (
+              <div
+                key={option.value}
+                id={`${listId}-${index}`}
+                data-index={index}
+                role="option"
+                aria-selected={selected}
+                onMouseMove={() => setActiveIndex(index)}
+                onClick={() => choose(index)}
+                className={`cursor-pointer rounded-xl px-3 py-2.5 text-sm transition-colors ${active ? "bg-violet-brand/25 text-white" : "text-white/75 hover:bg-white/10 hover:text-white"} ${selected ? "font-semibold text-white" : ""}`}
+              >
+                {option.label}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Aurora() {
   return (

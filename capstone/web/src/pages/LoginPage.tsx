@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Flame, Loader2, Sparkles, Target, Trophy } from "lucide-react";
-import { Aurora, ErrorNote, Logo } from "../components/ui";
+import { Aurora, Dropdown, ErrorNote, Logo } from "../components/ui";
 import { ApiError, api, teacherSignupEnabled } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
@@ -109,10 +109,13 @@ export default function LoginPage() {
             {mode === "up" && allowTeacher && (
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50" htmlFor="role">I am a</label>
-                <select id="role" className={inputCls} value={form.role} onChange={set("role")}>
-                  <option value="student" className="bg-ink-900">Student</option>
-                  <option value="teacher" className="bg-ink-900">Teacher</option>
-                </select>
+                <Dropdown
+                  id="role"
+                  className={inputCls}
+                  value={form.role}
+                  onChange={(role) => setForm((f) => ({ ...f, role }))}
+                  options={[{ value: "student", label: "Student" }, { value: "teacher", label: "Teacher" }]}
+                />
               </div>
             )}
             {error && <ErrorNote message={error} />}
