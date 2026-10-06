@@ -2,8 +2,8 @@
 
 This guide deploys the Capstone application as three Railway services in one Railway project and environment:
 
-1. **Streamlit** — the public user interface.
-2. **FastAPI** — private API called by the Streamlit server.
+1. **web** — the public React (Vite) single-page app, built to static files.
+2. **FastAPI** — the API. It must be **publicly reachable**, because the React app runs in the user's browser and calls it directly (unlike the old Streamlit server, which called it privately).
 3. **PostgreSQL** — private application database.
 
 The API also needs a persistent Railway Volume for its FAISS curriculum index. This guide follows the current repository layout: both Python services use `capstone/` as their Railway root directory. It assumes you have a GitHub repository containing the code and a Railway account.
@@ -59,7 +59,7 @@ Railway's PostgreSQL service is private by default and provides `DATABASE_URL` f
 
    Bind to `0.0.0.0` and use the API service's `PORT` variable so Railway can route traffic correctly. Define `PORT` explicitly in the API service's Variables, as described below, so the web service can reference the same value. Do not use the local `--reload` option in the deployed command. See [Railway start commands](https://docs.railway.com/deployments/start-command).
 
-6. In **Variables**, set `RAILPACK_PYTHON_VERSION` to `3.11`. This project pins `faiss-cpu==1.7.4`; selecting a compatible runtime avoids Railpack defaulting to a newer Python version for which that older FAISS wheel may be unavailable. Set the same variable on the Streamlit service in Step 6. See [Railpack Python configuration](https://railpack.com/languages/python).
+6. In **Variables**, set `RAILPACK_PYTHON_VERSION` to `3.11`. This project pins `faiss-cpu==1.7.4`; selecting a compatible runtime avoids Railpack defaulting to a newer Python version for which that older FAISS wheel may be unavailable. See [Railpack Python configuration](https://railpack.com/languages/python).
 
 7. In **Settings** → **Deploy**, set the **Healthcheck Path** to:
 
@@ -69,7 +69,7 @@ Railway's PostgreSQL service is private by default and provides `DATABASE_URL` f
 
    The FastAPI app already implements this endpoint. Railway uses it to verify a new deployment before switching traffic; it is not continuous monitoring. See [Railway healthchecks](https://docs.railway.com/deployments/healthchecks).
 
-8. Leave public networking disabled for the API. The Streamlit service will reach it through Railway's private network.
+8. Generate a public domain for the API (**Settings** → **Networking** → **Generate Domain**). The browser-based React app calls it directly. Keep the PostgreSQL service private.
 
 ### API variables
 
@@ -82,7 +82,8 @@ In the API service's **Variables** tab, add these variables. Use Railway's varia
 | `JWT_SECRET_KEY` | A newly generated, long, random secret. Do not use the example/default value in the code. |
 | `ENVIRONMENT` | `production` |
 | `DEBUG` | `false` |
-| `ALLOW_TEACHER_SIGNUP` | Use the same value on the API and web services. Set `true` only during initial teacher onboarding; set it to `false` before sharing the app. If omitted, teacher signup defaults off in production. |
+| `CORS_ORIGINS` | The public URL of the web service, for example `https://your-web.up.railway.app` (comma-separate multiple origins, no trailing slash). Set it after Step 6 generates the web domain. Without it the browser blocks every API call. |
+| `ALLOW_TEACHER_SIGNUP` | Set on the API; `VITE_ALLOW_TEACHER_SIGNUP` on the web service only controls whether the signup form shows the teacher option. Set `true` only during initial teacher onboarding; set it to `false` before sharing the app. If omitted, teacher signup defaults off in production. |
 | `VECTOR_DB_PATH` | `/data/vectors` |
 | `LLM_PROVIDER` | `groq` |
 | `LLM_MODEL` | `openai/gpt-oss-20b` (or the model configured for your Groq account) |
@@ -138,43 +139,45 @@ Railway documents pre-deploy commands as the place for database migrations. They
 1. Trigger a deployment from the API service's **Deployments** tab if it has not started automatically.
 2. Open the deployment logs. Wait for the build, pre-deploy migration, and API startup to finish successfully.
 3. Confirm the healthcheck passes.
-4. Confirm the API remains private. No public API domain is needed for normal use by Streamlit.
+4. Open `https://<api-domain>/health` in a browser and confirm `status: ok`.
 
 If the build fails, first check that the root directory is `/capstone`, the start command is exact, and required dependencies are listed in `capstone/requirements.txt`. If a database error occurs, confirm that `DATABASE_URL` references the PostgreSQL service in this same project and environment.
 
-## 6. Create the Streamlit service
+## 6. Create the web (React) service
 
 1. From the same project canvas, add another **GitHub Repo** service using the same repository and branch.
-2. Rename it to **web** or **streamlit**.
+2. Rename it to **web**.
 3. Set its **Root Directory** to:
 
    ```text
-   /capstone
+   /capstone/web
    ```
 
-4. In **Variables**, set `RAILPACK_PYTHON_VERSION` to `3.11`, matching the API service.
+4. Add these **Variables**. Vite bakes `VITE_*` values into the build, so set them **before** the first deploy and redeploy after any change:
 
-5. Set its **Start Command** to:
+   | Variable | Value |
+   |---|---|
+   | `VITE_API_BASE_URL` | The API's public URL, for example `https://your-api.up.railway.app` (no trailing slash). |
+   | `VITE_ALLOW_TEACHER_SIGNUP` | `false` for public use. Set `true` only while creating the initial teacher accounts. |
+
+5. Set the **Build Command** to:
 
    ```sh
-   python -m streamlit run frontend/Home.py --server.address 0.0.0.0 --server.port $PORT
+   npm ci && npm run build
    ```
 
-6. Add an `API_BASE_URL` variable with this value, replacing `api` if you named the service differently:
+6. Set the **Start Command** to serve the built `dist/` folder with single-page-app fallback, so deep links such as `/results` do not 404:
 
-   ```text
-   http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}
+   ```sh
+   npx --yes serve -s dist -l $PORT
    ```
 
-   Define `PORT` explicitly in the API service's Variables (see **API variables** above) and ensure it matches the port Uvicorn listens on. The web service can then reference that configured service variable. Use `http` for private service-to-service communication. The Streamlit Python process calls FastAPI using this environment variable; browsers do not call the private API directly.
+   This needs Node 20 or newer. If Railway picks an older Node, set `RAILPACK_NODE_VERSION` to `22` on this service.
 
-7. Add `ENVIRONMENT=production` and set `ALLOW_TEACHER_SIGNUP` to the same value as on the API service. You can create a Railway shared variable and attach it to both services, or enter the same value separately on each service. The form hides the teacher role when this is `false`; FastAPI independently rejects teacher registration. If `ALLOW_TEACHER_SIGNUP` is missing, both services default to disabled in production.
+7. Generate a public domain for the web service (**Settings** → **Networking** → **Generate Domain**), then add that URL to the API's `CORS_ORIGINS` (Step 3) and redeploy the API. Do not share it yet.
+8. The web service is stateless. The API should stay at one replica (see Step 3).
 
-8. Generate a public domain for the Streamlit service only: **Settings** → **Networking** → **Public Networking** → **Generate Domain**. Do not share it yet.
-9. Leave the Streamlit service at one replica initially. This is the simplest setup for Streamlit session state and local process resources.
-10. Deploy the service and review its logs until Streamlit starts successfully.
-
-Both services initially install `capstone/requirements.txt`, which includes backend and test dependencies as well as Streamlit. The first builds may take longer because packages such as FAISS and sentence-transformers are large. Keep the existing shared file for the first deployment; splitting service-specific requirements can be a later build optimization.
+The API service installs `capstone/requirements.txt`. The web service needs neither Python nor Streamlit, and `RAILPACK_PYTHON_VERSION` is needed only on the API service.
 
 Railway private domains use `<service-name>.railway.internal`; reference variables let you construct the API URL without hardcoding its internal host or port. See [Working with Railway domains](https://docs.railway.com/networking/domains/working-with-domains).
 
@@ -217,17 +220,17 @@ See [Railway SSH](https://docs.railway.com/cli/ssh) for service shells and singl
 
 Before sharing the URL, create your initial teacher accounts and then turn teacher signup off:
 
-1. While the URL is undistributed, set `ALLOW_TEACHER_SIGNUP=true` on both services and deploy the staged changes.
-2. Open the Streamlit URL and create the teacher accounts you need through the existing signup form.
-3. Change `ALLOW_TEACHER_SIGNUP` to `false` on both services and deploy the staged changes. If using a shared variable, change it once and apply/redeploy both services.
+1. While the URL is undistributed, set `ALLOW_TEACHER_SIGNUP=true` on the API and `VITE_ALLOW_TEACHER_SIGNUP=true` on the web service and deploy the staged changes.
+2. Open the web URL and create the teacher accounts you need through the signup form.
+3. Change `ALLOW_TEACHER_SIGNUP` (API) and `VITE_ALLOW_TEACHER_SIGNUP` (web) to `false` and redeploy both services. The web service must be rebuilt for the change to take effect.
 4. Confirm that signup offers only Student and that a teacher-registration request is rejected by the API. Existing teacher accounts remain able to sign in and use teacher pages.
-5. Only then share the Streamlit URL.
+5. Only then share the web URL.
 
 If a Railway deploy applies variable changes automatically in your project, wait for both services to finish redeploying before sharing. In any case, do not leave teacher signup enabled during public use.
 
-Open the public Streamlit domain and work through the following checks:
+Open the public web domain and work through the following checks:
 
-1. **Frontend to API:** The Streamlit page loads without an “API unavailable” error. If not, verify `API_BASE_URL` and the exact API service name.
+1. **Frontend to API:** The login page loads and sign-in works. If the page says "Can't reach the server", verify `VITE_API_BASE_URL` (then rebuild) and that the API's `CORS_ORIGINS` includes the web URL. Also open a deep link such as `/results` directly.
 2. **Authentication:** Register and sign in with a test student account. Confirm logout and login work.
 3. **Role access:** Verify student and teacher navigation differs by role and protected workflows reject the wrong role.
 4. **Curriculum:** Confirm the curriculum-backed pages can retrieve Mathematics and Physics curriculum data.
@@ -241,11 +244,11 @@ Use test accounts and non-sensitive data during these checks. The `/health` endp
 
 - Enable PostgreSQL backups and periodically verify that you can restore one. A backup that has never been restored is unverified.
 - Back up the API's FAISS volume or keep a documented way to rebuild it from PostgreSQL source records and the unchanged curriculum PDFs. The database and vector index are separate persisted data and should both be considered in recovery planning.
-- Keep API and PostgreSQL private. Only Streamlit needs a public domain for normal app usage.
+- Keep PostgreSQL private. The web and API services need public domains.
 - Keep `JWT_SECRET_KEY` and `GROQ_API_KEY` out of Git, screenshots, and logs. Rotate the JWT secret if it is exposed; existing access tokens will no longer validate.
-- Keep `ALLOW_TEACHER_SIGNUP=false` before sharing the public URL. The API rejects teacher registrations even if a request bypasses the Streamlit form.
+- Keep `ALLOW_TEACHER_SIGNUP=false` before sharing the public URL. The API rejects teacher registrations even if a request bypasses the signup form.
 - Start with one API replica while using local FAISS on a volume. If you later need multiple API replicas, move vectors into a shared vector service/store and verify concurrent ingestion behavior before scaling.
-- Monitor API and Streamlit deployment logs after each deploy. Railway healthchecks are used during deployment activation, not as an ongoing uptime monitor.
+- Monitor API and web deployment logs after each deploy. Railway healthchecks are used during deployment activation, not as an ongoing uptime monitor.
 
 ## Troubleshooting quick reference
 
@@ -254,7 +257,8 @@ Use test accounts and non-sensitive data during these checks. The `/health` endp
 | Railway reports no start command | Confirm the service's custom start command and `/capstone` root directory. |
 | API healthcheck fails | Confirm the API binds to `0.0.0.0:$PORT`, and healthcheck path is `/health`. |
 | API reports database connection error | Confirm API `DATABASE_URL` references Railway PostgreSQL in the same environment; check migration logs. |
-| Streamlit says API unavailable or its API URL has a blank port | Confirm the API service has an explicitly defined `PORT` variable, that Uvicorn listens on that port, and that `API_BASE_URL` is `http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}`. Confirm both services are running in the same project/environment. |
+| Browser shows "Can't reach the server" or CORS errors | Confirm `VITE_API_BASE_URL` is the API's public URL (a change needs a web rebuild), the API has a public domain, and `CORS_ORIGINS` on the API exactly matches the web origin (no trailing slash). |
+| Refreshing `/results` or another deep link returns 404 | Confirm the web start command uses `serve -s` (single-page-app mode). |
 | Curriculum retrieval finds no data | Run the ingestion command in the live API container; check its logs and confirm both PDFs are present in the deployed repository. |
 | Curriculum works, then disappears after redeploy | Confirm the API volume mount is `/data/vectors` and `VECTOR_DB_PATH` matches exactly. |
 | Generation returns provider errors | Set a valid `GROQ_API_KEY` on the API service and verify the configured Groq model name. |

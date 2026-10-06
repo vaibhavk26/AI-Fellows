@@ -2,6 +2,12 @@
 
 This is the canonical local setup path for Windows PowerShell. Run commands from the `capstone/` directory unless noted otherwise.
 
+## Prerequisites
+
+- Python 3.11 and PostgreSQL (see the database section below).
+- **Node.js 20 or newer and npm** for the React UI in `web/` (tested with Node 24). Check with `node -v`.
+- Groq API key for question generation (optional for browsing and tests).
+
 ## Local environment
 
 ```powershell
@@ -146,6 +152,10 @@ cd web
 npm install
 npm run dev
 ```
+
+The React app calls the API at `http://localhost:8000` by default, and the API allows the Vite origin (`http://localhost:5173`) through CORS, so no extra configuration is needed locally. To point the UI at a different API, create `web/.env.local` with `VITE_API_BASE_URL=<url>` and set `CORS_ORIGINS` on the API to the UI's origin. See [web/README.md](web/README.md).
+
+The Streamlit UI has been retired, so `requirements.txt` no longer includes Streamlit. React dependencies live in `web/package.json` and are installed by `npm install`; re-run it after pulling changes.
 
 Open the app at http://localhost:5173, API docs at http://localhost:8000/docs, and ReDoc at http://localhost:8000/redoc.
 
