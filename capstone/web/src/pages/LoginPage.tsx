@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Flame, Loader2, Sparkles, Target, Trophy } from "lucide-react";
+import { Eye, EyeOff, Flame, Loader2, Sparkles, Target, Trophy } from "lucide-react";
 import { Aurora, Dropdown, ErrorNote, Logo } from "../components/ui";
 import { ApiError, api, teacherSignupEnabled } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -24,6 +24,7 @@ function Perk({ icon: Icon, title, text, delay }: { icon: typeof Flame; title: s
 export default function LoginPage() {
   const { user, signIn } = useAuth();
   const [mode, setMode] = useState<"in" | "up">("in");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -104,7 +105,18 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/50" htmlFor="password">Password</label>
-              <input id="password" type="password" required minLength={8} autoComplete={mode === "in" ? "current-password" : "new-password"} className={inputCls} placeholder="At least 8 characters" value={form.password} onChange={set("password")} />
+              <div className="relative">
+                <input id="password" type={showPassword ? "text" : "password"} required minLength={8} autoComplete={mode === "in" ? "current-password" : "new-password"} className={`${inputCls} pr-12`} placeholder="At least 8 characters" value={form.password} onChange={set("password")} />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 grid w-12 place-items-center rounded-r-2xl text-white/50 transition hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-brand"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </div>
             {mode === "up" && allowTeacher && (
               <div>

@@ -53,8 +53,8 @@ export function Dropdown({
 
   const choose = (index: number) => {
     const option = options[index];
-    if (option) onChange(option.value);
     setIsOpen(false);
+    if (option) onChange(option.value);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -123,7 +123,10 @@ export function Dropdown({
                 role="option"
                 aria-selected={selected}
                 onMouseMove={() => setActiveIndex(index)}
-                onClick={() => choose(index)}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  choose(index);
+                }}
                 className={`cursor-pointer rounded-xl px-3 py-2.5 text-sm transition-colors ${active ? "bg-violet-brand/25 text-white" : "text-white/75 hover:bg-white/10 hover:text-white"} ${selected ? "font-semibold text-white" : ""}`}
               >
                 {option.label}
