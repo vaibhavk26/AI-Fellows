@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { animate, motion } from "framer-motion";
-import { ChevronDown, Zap } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 export interface DropdownOption { value: string; label: string }
 
@@ -156,14 +156,12 @@ export function Aurora() {
 export function Logo({ size = "md" }: { size?: "md" | "lg" }) {
   const big = size === "lg";
   return (
-    <div className="flex items-center gap-2.5">
-      <div className={`btn-primary grid place-items-center rounded-2xl ${big ? "h-12 w-12" : "h-9 w-9"}`}>
-        <Zap className={big ? "h-6 w-6" : "h-5 w-5"} fill="white" />
-      </div>
-      <span className={`font-display font-bold tracking-tight ${big ? "text-3xl" : "text-xl"}`}>
-        Exam<span className="text-gradient">IQ</span>
-      </span>
-    </div>
+    <img
+      src="/logo.png"
+      alt="ExamIQ — Intelligent Evaluation & Learning"
+      className="h-auto w-full object-contain"
+      style={{ maxWidth: big ? 100 : 100 }}
+    />
   );
 }
 

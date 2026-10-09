@@ -45,7 +45,7 @@ export function AppShell() {
     <div className="min-h-screen">
       <Aurora />
       <aside className="app-sidebar glass fixed inset-y-3 left-3 z-20 hidden w-64 flex-col rounded-3xl p-5 md:flex">
-        <Logo />
+        <div className="-mx-3 flex justify-center"><Logo /></div>
         <nav className="mt-10 flex flex-1 flex-col gap-1.5">
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink
