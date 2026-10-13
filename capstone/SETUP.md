@@ -2,6 +2,12 @@
 
 This is the canonical local setup path for Windows PowerShell. Run commands from the `capstone/` directory unless noted otherwise.
 
+## Prerequisites
+
+- Python 3.11 and PostgreSQL (see the database section below).
+- **Node.js 20 or newer and npm** for the React UI in `web/` (tested with Node 24). Check with `node -v`.
+- Groq API key for question generation (optional for browsing and tests).
+
 ## Local environment
 
 ```powershell
@@ -139,13 +145,19 @@ Invoke-RestMethod -Uri http://localhost:8000/health -Method Get
 
 Expected output is `status: ok`. 
 
-Start Streamlit in a third terminal:
+Start the React app in a third terminal:
 
 ```powershell
-.\.venv\Scripts\python.exe -m streamlit run frontend/Home.py --server.port 8501
+cd web
+npm install
+npm run dev
 ```
 
-Open the app at http://localhost:8501, API docs at http://localhost:8000/docs, and ReDoc at http://localhost:8000/redoc.
+The React app calls the API at `http://localhost:8000` by default, and the API allows the Vite origin (`http://localhost:5173`) through CORS, so no extra configuration is needed locally. To point the UI at a different API, create `web/.env.local` with `VITE_API_BASE_URL=<url>` and set `CORS_ORIGINS` on the API to the UI's origin. See [web/README.md](web/README.md).
+
+The Streamlit UI has been retired, so `requirements.txt` no longer includes Streamlit. React dependencies live in `web/package.json` and are installed by `npm install`; re-run it after pulling changes.
+
+Open the app at http://localhost:5173, API docs at http://localhost:8000/docs, and ReDoc at http://localhost:8000/redoc.
 
 ## Authentication and Authorization
 
@@ -211,7 +223,7 @@ Run the complete suite using the project interpreter:
 .\.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-The current suite collects 83 tests: 48 unit, 24 integration, and 11 Playwright browser tests. Backend coverage is in `tests/unit/` and `tests/integration/`; browser coverage is in `tests/e2e/test_frontend_browser.py`. Backend tests use mocked LLM responses and do not call Groq or require a live API key.
+The current suite collects 89 tests: 48 unit, 25 integration, and 16 Playwright browser tests. Backend coverage is in `tests/unit/` and `tests/integration/`; browser coverage is in `tests/e2e/test_react_browser.py`. Backend tests use mocked LLM responses and do not call Groq or require a live API key.
 
 Run the suite with coverage:
 
@@ -227,7 +239,7 @@ The Playwright suite exercises authentication, role restrictions, dashboard/resu
 .\.venv\Scripts\python.exe -m playwright install chromium
 ```
 
-Start FastAPI and Streamlit in separate terminals. Add the email and password for a teacher account with at least three validated easy MCQs in one chapter to `.env.local`:
+Start FastAPI and the React dev server (`npm run dev` in `web/`) in separate terminals. Add the email and password for a teacher account with at least three validated easy MCQs in one chapter to `.env.local`:
 
 ```env
 E2E_TEACHER_EMAIL=teacher@example.com
@@ -240,7 +252,7 @@ The E2E fixtures load these values from `.env.local`; process environment variab
 .\.venv\Scripts\python.exe -m pytest tests/e2e -m e2e -q
 ```
 
-The browser tests create temporary users. Populated-bank tests use the configured teacher account and require at least three validated easy MCQs in one chapter. Override `E2E_API_URL` or `E2E_FRONTEND_URL` when services use non-default ports.
+The browser tests create temporary users. Populated-bank tests use the configured teacher account and require at least three validated easy MCQs in one chapter. Override `E2E_API_URL` or `E2E_WEB_URL` when services use non-default ports.
 
 Numerical generation requires a safe `formula` and `quantities` response. If Groq omits those fields, the service retries once. If the retry is missing, unsafe, or mathematically inconsistent, the question is stored as `rejected`. Calculation details are internal and are not added to the database schema or API response.
 

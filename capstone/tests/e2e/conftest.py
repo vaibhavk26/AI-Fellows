@@ -9,7 +9,7 @@ from playwright.sync_api import Browser, Page, sync_playwright
 
 
 API_URL = os.getenv("E2E_API_URL", "http://localhost:8000").rstrip("/")
-FRONTEND_URL = os.getenv("E2E_FRONTEND_URL", "http://localhost:8501").rstrip("/")
+WEB_URL = os.getenv("E2E_WEB_URL", "http://localhost:5173").rstrip("/")
 LOCAL_ENV_FILE = Path(__file__).resolve().parents[2] / ".env.local"
 
 
@@ -21,11 +21,12 @@ def _teacher_login_credentials(env_file: Path = LOCAL_ENV_FILE) -> tuple[str | N
     )
 
 
-def _skip_if_unavailable() -> None:
+def _skip_if_unavailable(url: str | None = None) -> None:
     try:
         response = requests.get(f"{API_URL}/health", timeout=3)
         response.raise_for_status()
-        requests.get(FRONTEND_URL, timeout=3).raise_for_status()
+        if url:
+            requests.get(url, timeout=3).raise_for_status()
     except requests.RequestException as error:
         pytest.skip(f"E2E services are unavailable: {error}")
 
@@ -40,8 +41,9 @@ def browser() -> Browser:
 
 
 @pytest.fixture(scope="session")
-def frontend_url() -> str:
-    return FRONTEND_URL
+def web_url() -> str:
+    _skip_if_unavailable(WEB_URL)
+    return WEB_URL
 
 
 @pytest.fixture(scope="session")
@@ -199,8 +201,7 @@ def assignment_exam(
 
 @pytest.fixture
 def numerical_bank() -> dict:
-    teacher_email = os.getenv("E2E_TEACHER_EMAIL")
-    teacher_password = os.getenv("E2E_TEACHER_PASSWORD")
+    teacher_email, teacher_password = _teacher_login_credentials()
     if not teacher_email or not teacher_password:
         pytest.skip("Set E2E_TEACHER_EMAIL and E2E_TEACHER_PASSWORD for numerical E2E tests")
     login = requests.post(
